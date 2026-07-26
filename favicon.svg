@@ -1,13 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#0e0f13"/>
-  <!-- the socket table: rows sharing a port; the matched row is sage,
-       and a violet arrival dot rests on it (the packet that just landed) -->
-  <rect x="6" y="8"  width="20" height="4.4" rx="1.4" fill="#2c2d35"/>
-  <rect x="6" y="14" width="20" height="4.4" rx="1.4" fill="#63c58c"/>
-  <rect x="6" y="20" width="20" height="4.4" rx="1.4" fill="#2c2d35"/>
-  <!-- the shared port, amber, at the left edge of every row -->
-  <rect x="6" y="8" width="3.2" height="16.4" rx="1" fill="#dca24f"/>
-  <!-- the violet packet arriving on the matched socket -->
-  <circle cx="23" cy="16.2" r="3.6" fill="#a879ff"/>
-  <circle cx="23" cy="16.2" r="3.6" fill="none" stroke="#a879ff" stroke-opacity="0.35" stroke-width="3"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#0e0f13"/>
+  <!-- one connection, three names: wire/port (amber), socket (sage, middle),
+       process/fd (slate blue) — with the violet connection resting on the socket -->
+  <rect x="12" y="13" width="40" height="9"  rx="2.5" fill="#dca24f"/>
+  <rect x="12" y="27" width="40" height="10" rx="2.5" fill="#63c58c"/>
+  <rect x="12" y="42" width="40" height="9"  rx="2.5" fill="#6f9fd8"/>
+  <!-- the port descends into the socket, the fd rises into it -->
+  <path d="M32 22 l4 4 -8 0 z" fill="#dca24f"/>
+  <path d="M32 42 l4 -4 -8 0 z" fill="#6f9fd8"/>
+  <!-- the connection lives in the socket -->
+  <circle cx="32" cy="32" r="3.7" fill="#a879ff" stroke="#0e0f13" stroke-width="1.4"/>
+  <circle cx="32" cy="32" r="3.7" fill="none" stroke="#a879ff" stroke-opacity="0.3" stroke-width="3"/>
 </svg>
