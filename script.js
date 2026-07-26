@@ -1,523 +1,338 @@
 /* ============================================================
-   Ports ≠ Sockets — a dense, interactive demux anatomy.
+   Ports ≠ Sockets — a live nginx server, in three acts.
 
-   One packet arrives at a Linux host and climbs the stack. The live
-   kernel socket table narrows, field by field, from "every socket that
-   shares this port" down to the single socket that receives the bytes —
-   because a PORT is only a number the kernel looks up, while a SOCKET is
-   the endpoint that actually holds the data.
+   A PORT is the single address a server listens on. A SOCKET is a
+   connection — there are many, one per client, and it is the file
+   descriptor your code read()/write()s. You drive a real nginx server
+   and watch the kernel socket table; the port stays one while the sockets
+   multiply. Then you break it the way production does.
 
-   Prev / Next (or ← →) walk the seven steps; tap a socket row to inspect
-   it; tap an anatomy row to see its real fields as ss / tcpdump / proc
-   would show them; 🎲 New packet generates a fresh arrival.
+     Act I  — Bind & Accept : one port, many sockets · EADDRINUSE · the fd ceiling
+     Act II — Outbound      : ephemeral source ports · TIME-WAIT
+     Act III— Scale         : SO_REUSEPORT — many listeners, one port
    ============================================================ */
 (function () {
   "use strict";
 
-  var HOST = "10.0.0.1";
+  var HOST = "10.0.0.1";        // the box running nginx
+  var UP = "10.0.0.9", UP_PORT = 5432;   // an upstream (Postgres) for Act II
+  var NGINX_PID = 812, APP_PID = 930;
+  var FD_LIMIT = 12;            // this demo host's ulimit -n (kept small on purpose)
+  var CONN_CAP = 8;            // inbound connections before the fd ceiling (fds 4..11)
+  var PORT_CAP = 8;            // outbound src ports before the ephemeral range "runs out"
+
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
   var $ = function (id) { return document.getElementById(id); };
-  var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
   var rint = function (a, b) { return a + Math.floor(Math.random() * (b - a + 1)); };
-  var pick = function (a) { return a[Math.floor(Math.random() * a.length)]; };
+  var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
+  var idSeq = 1;
 
-  /* ---------- the host's baseline sockets ----------
-     A pair of established web connections behind one listener, an ssh
-     listener, and a UDP resolver — enough to show that a port is a shared
-     bucket, not a connection. */
-  function baseTable() {
-    return [
-      { id: "l80", state: "LISTEN", proto: "tcp", recvq: 0, sendq: 128, lip: "0.0.0.0", lport: 80, pip: "0.0.0.0", pport: "*", proc: "nginx",   pid: 812, fd: 6 },
-      { id: "c1",  state: "ESTAB",  proto: "tcp", recvq: 0, sendq: 0,   lip: HOST,      lport: 80, pip: "10.0.0.55", pport: 54321, proc: "nginx", pid: 814, fd: 12 },
-      { id: "c2",  state: "ESTAB",  proto: "tcp", recvq: 0, sendq: 0,   lip: HOST,      lport: 80, pip: "10.0.0.66", pport: 12345, proc: "nginx", pid: 815, fd: 15 },
-      { id: "l22", state: "LISTEN", proto: "tcp", recvq: 0, sendq: 128, lip: "0.0.0.0", lport: 22, pip: "0.0.0.0", pport: "*", proc: "sshd",    pid: 701, fd: 4 },
-      { id: "d53", state: "UNCONN", proto: "udp", recvq: 0, sendq: 0,   lip: "0.0.0.0", lport: 53, pip: "0.0.0.0", pport: "*", proc: "systemd-resolve", pid: 640, fd: 8 }
-    ];
-  }
-  var newClient = function () { return "10.0.0." + rint(100, 250); };
-  var ephemeral = function () { return rint(49152, 65535); };
-
-  /* ---------- packet catalogue ----------
-     Each returns just the packet; resolve() derives the demux outcome from
-     the table, so the narration can never disagree with what's on screen. */
-  function estabData()  { return { proto: "tcp", sip: "10.0.0.55", sport: 54321, dip: HOST, dport: 80, kind: "data", bytes: pick([140, 512, 733]), flags: "[P.]", seq: rint(1e6, 9e6), scen: "An established connection sends more data." }; }
-  function estabData2() { return { proto: "tcp", sip: "10.0.0.66", sport: 12345, dip: HOST, dport: 80, kind: "data", bytes: pick([96, 428, 1024]), flags: "[P.]", seq: rint(1e6, 9e6), scen: "A different client on the same port :80." }; }
-  function synNew()     { return { proto: "tcp", sip: newClient(), sport: ephemeral(), dip: HOST, dport: 80, kind: "SYN", bytes: 0, flags: "[S]", seq: rint(1e6, 9e6), scen: "A brand-new client opens a connection to :80." }; }
-  function udpDns()     { return { proto: "udp", sip: newClient(), sport: ephemeral(), dip: HOST, dport: 53, kind: "datagram", bytes: pick([32, 41, 58]), flags: "", seq: 0, scen: "A UDP DNS query — connectionless." }; }
-  function sshNew()     { return { proto: "tcp", sip: newClient(), sport: ephemeral(), dip: HOST, dport: 22, kind: "SYN", bytes: 0, flags: "[S]", seq: rint(1e6, 9e6), scen: "Someone opens an SSH connection to :22." }; }
-  function closedTcp()  { return { proto: "tcp", sip: newClient(), sport: ephemeral(), dip: HOST, dport: pick([81, 8080, 3000]), kind: "SYN", bytes: 0, flags: "[S]", seq: rint(1e6, 9e6), scen: "A SYN to a port with nothing bound." }; }
-  function closedUdp()  { return { proto: "udp", sip: newClient(), sport: ephemeral(), dip: HOST, dport: pick([9999, 5000]), kind: "datagram", bytes: pick([30, 64]), flags: "", seq: 0, scen: "A UDP datagram to a port nobody owns." }; }
-  function wrongHost()  { return { proto: "tcp", sip: newClient(), sport: ephemeral(), dip: "10.0.0.9", dport: 80, kind: "SYN", bytes: 0, flags: "[S]", seq: rint(1e6, 9e6), scen: "A packet whose destination IP isn't this host." }; }
-
-  // weighted: the common "established data" case is the anchor; edge cases stay rare.
-  var CATALOG = [estabData, estabData, estabData2, synNew, synNew, udpDns, sshNew, closedTcp, closedUdp, wrongHost];
-
-  var fdSeq = 18;
-  function resolve(packet) {
-    var table = baseTable();
-    var R = { packet: packet, table: table, bucketIds: {}, matchId: null, deliverId: null, newSocket: null, outcome: null };
-
-    // L3 — is this packet even for us?
-    if (packet.dip !== HOST) { R.outcome = "drop"; return R; }
-
-    // L4 — the "port bucket": sockets bound to (proto, dport) on this host.
-    var bucket = table.filter(function (s) { return s.proto === packet.proto && s.lport === packet.dport && (s.lip === HOST || s.lip === "0.0.0.0"); });
-    bucket.forEach(function (s) { R.bucketIds[s.id] = true; });
-
-    if (bucket.length === 0) { R.outcome = packet.proto === "tcp" ? "reset" : "unreach"; return R; }
-
-    if (packet.proto === "tcp") {
-      var estab = bucket.filter(function (s) { return s.state === "ESTAB" && s.pip === packet.sip && s.pport === packet.sport; })[0];
-      if (estab) { R.outcome = "deliver"; R.matchId = estab.id; R.deliverId = estab.id; return R; }
-      var listen = bucket.filter(function (s) { return s.state === "LISTEN"; })[0];
-      if (listen && packet.kind === "SYN") {
-        R.outcome = "accept"; R.matchId = listen.id;
-        R.newSocket = { id: "new", state: "ESTAB", proto: "tcp", recvq: 0, sendq: 0, lip: HOST, lport: packet.dport,
-          pip: packet.sip, pport: packet.sport, proc: listen.proc, pid: listen.pid, fd: fdSeq++ };
-        R.deliverId = "new"; return R;
-      }
-      R.outcome = "reset"; return R;   // data with no matching connection → RST
-    }
-
-    // UDP — connectionless: the single socket on this port serves every peer.
-    var u = bucket.filter(function (s) { return s.state === "UNCONN"; })[0] || bucket[0];
-    R.outcome = "deliver"; R.matchId = u.id; R.deliverId = u.id; return R;
-  }
-
-  /* ---------- the seven steps of the climb ---------- */
-  var NODES = [
-    { icon: "📡", name: "Wire",    sub: "bytes arriving" },
-    { icon: "🔗", name: "NIC",     sub: "L2 · link" },
-    { icon: "🧭", name: "IP",      sub: "L3 · dst ip" },
-    { icon: "🔢", name: "Port",    sub: "L4 · lookup" },
-    { icon: "🎯", name: "Demux",   sub: "5-tuple match" },
-    { icon: "📥", name: "Socket",  sub: "recv buffer" },
-    { icon: "⚙️", name: "Process", sub: "recv()" }
-  ];
-  var MAXSTEP = NODES.length - 1;
-  var SPOTLIGHT = { 3: "port", 4: "tuple", 5: "socket", 6: "socket" };
-
-  /* ---------- header / field anatomy diagrams ---------- */
-  var TCP_ROWS = [
-    { cells: [ { label: "Source port", w: 16, sub: "16 b" }, { label: "Destination port", w: 16, sub: "16 b", hi: true } ] },
-    { cells: [ { label: "Sequence number", w: 32, sub: "32 b" } ] },
-    { cells: [ { label: "Acknowledgement number", w: 32, sub: "32 b" } ] },
-    { cells: [ { label: "Offset", w: 4, sub: "4 b" }, { label: "Rsvd", w: 4, sub: "4 b" }, { label: "Flags", w: 8, flags: ["URG", "ACK", "PSH", "RST", "SYN", "FIN"] }, { label: "Window", w: 16, sub: "16 b" } ] },
-    { cells: [ { label: "Checksum", w: 16, sub: "16 b" }, { label: "Urgent pointer", w: 16, sub: "16 b" } ] }
-  ];
-  var UDP_ROWS = [
-    { cells: [ { label: "Source port", w: 16, sub: "16 b" }, { label: "Destination port", w: 16, sub: "16 b", hi: true } ] },
-    { cells: [ { label: "Length", w: 16, sub: "16 b" }, { label: "Checksum", w: 16, sub: "16 b" } ] }
-  ];
-  function diagram(title, colorVar, rows) {
-    var html = '<div class="hf" style="--a:var(' + colorVar + ')"><div class="hf-title">' + esc(title) + "</div>";
-    rows.forEach(function (row) {
-      html += '<div class="hf-row">';
-      row.cells.forEach(function (cell) {
-        var body = '<span class="hf-l">' + esc(cell.label) + "</span>";
-        if (cell.flags) body += '<span class="hf-flags">' + cell.flags.map(function (f) { return "<span>" + esc(f) + "</span>"; }).join("") + "</span>";
-        else if (cell.sub) body += '<span class="hf-s">' + esc(cell.sub) + "</span>";
-        html += '<div class="hf-c' + (cell.hi ? " hi" : "") + (cell.variable ? " hf-var" : "") + '" style="flex:' + cell.w + '">' + body + "</div>";
-      });
-      html += "</div>";
-    });
-    return html + "</div>";
-  }
-  function tupleDiagram(p) {
-    var rows = [ { cells: [
-      { label: p.proto.toUpperCase(), w: 8, sub: "proto" },
-      { label: p.sip, w: 22, sub: "src ip" },
-      { label: ":" + p.sport, w: 12, sub: "src port" },
-      { label: p.dip, w: 22, sub: "dst ip" },
-      { label: ":" + p.dport, w: 12, sub: "dst port", hi: true }
-    ] } ];
-    return diagram("connection identity · the socket's key", "--c-tuple", rows);
-  }
+  /* ---------- small builders shared by the "why it matters" cards ---------- */
   function term(cmd, out) { return '<div class="term"><div class="term-cmd">' + esc("$ " + cmd) + '</div><pre class="term-out">' + esc(out) + "</pre></div>"; }
-  function fields(list) { return '<div class="ld-fields">' + list.map(function (f) { return '<div class="ld-field">' + f + "</div>"; }).join("") + "</div>"; }
-  var peerOf = function (s) { return s.pip + ":" + s.pport; };
-  var localOf = function (s) { return s.lip + ":" + s.lport; };
+  function note(html) { return '<div class="ld-fields"><div class="ld-field">' + html + "</div></div>"; }
+  function chip(colorVar, label) { return '<span class="tchip lit" style="--tc:var(' + colorVar + ')">' + esc(label) + "</span>"; }
 
-  /* ---------- the four anatomy rows (number vs. endpoint) ---------- */
-  var STACK = [
-    { key: "port",   name: "Port",   kind: "the number", color: "--c-port",
-      cap: "A 16-bit value in the packet header. No buffer, no state, no owner — just a label the kernel looks up." },
-    { key: "tuple",  name: "5-tuple", kind: "the key", color: "--c-tuple",
-      cap: "proto · src ip · src port · dst ip · dst port. The full identity the kernel hashes to find one socket." },
-    { key: "socket", name: "Socket", kind: "the endpoint", color: "--c-socket",
-      cap: "A kernel object with receive & send buffers, protocol state and a file descriptor. This is what holds your data." },
-    { key: "listen", name: "Listening vs connected", kind: "one : many", color: "--c-listen",
-      cap: "One LISTEN socket accepts many clients; each accepted client gets its own connected socket — same local port, different peer." }
+  var peerOf = function (s) { return s.pport === "*" ? "0.0.0.0:*" : s.pip + ":" + s.pport; };
+  var countState = function (st) { var n = 0; state.sockets.forEach(function (s) { if (s.state === st) n++; }); return n; };
+  var countKind = function (k) { var n = 0; state.sockets.forEach(function (s) { if (s.kind === k) n++; }); return n; };
+
+  /* ============================================================
+     THE ACTS
+     Each act sets up the initial sockets, lists its action buttons,
+     supplies its live status line / counters / default takeaway, and its
+     "why it matters" cards. Actions mutate `state` and set `state.flash`
+     (a line for the stat area) and `state.spot` (a card to highlight).
+     ============================================================ */
+  var ACTS = [
+    /* ---------------- Act I — Bind & Accept ---------------- */
+    {
+      num: "I", name: "Bind & Accept",
+      dek: "One nginx, one port — so how does it serve every client at once?",
+      ss: "ss -tlnp ; ss -tnp",
+      init: function () {
+        state.sockets = [ mk({ state: "LISTEN", kind: "listen", lip: "0.0.0.0", lport: 80, pip: "0.0.0.0", pport: "*", proc: "nginx", pid: NGINX_PID, fd: 3 }) ];
+      },
+      actions: function () { return [
+        { id: "accept", label: "Accept a client", run: acceptI },
+        { id: "close", label: "Close a connection", run: closeI, enabled: countKind("conn") > 0 },
+        { id: "second", label: "Start a 2nd nginx", danger: true, run: secondNginx }
+      ]; },
+      ticket: function () { var n = countKind("conn"); return method("nginx") + '<span class="req-path">listening on :<b>80</b></span><span class="req-body">' + n + " connection" + (n === 1 ? "" : "s") + "</span>"; },
+      counters: function () { var n = countKind("conn"); return chip("--c-port", "1 port · :80") + chip("--c-socket", n + " socket" + (n === 1 ? "" : "s")) + chip("--c-tuple", (n + 1) + " open fds"); },
+      stat: function () { return { html: "One <b>LISTEN</b> row is the port. Every <b>ESTAB</b> row is a separate connection — same :80, its own fd. That is how a single port serves everyone." }; },
+      cards: [
+        { key: "socket", name: "The socket is the endpoint", kind: "what you read", color: "--c-socket",
+          cap: "<code>accept()</code> hands your code a new <b>fd</b> per client — that fd is the socket, and it's what you <code>read()</code>/<code>write()</code>. The port only named the door.",
+          detail: term("ss -tnp state established '( sport = :80 )'",
+            'ESTAB 0 0 10.0.0.1:80 10.0.0.55:54321 users:(("nginx",pid=812,fd=4))\n' +
+            'ESTAB 0 0 10.0.0.1:80 10.0.0.66:12345 users:(("nginx",pid=812,fd=5))\n' +
+            "# same :80 — one socket (fd) per connection") +
+            note("Your handler never sees the port as a channel; it holds a socket fd. <code>read(fd)</code> drains that one client's bytes and nobody else's.") },
+        { key: "bind", name: "One bind per port", kind: "EADDRINUSE", color: "--c-listen",
+          cap: "Only one socket may <code>bind()</code> a given port. A second process on :80 gets <b>EADDRINUSE</b> — nothing to do with how many clients are connected.",
+          detail: term("sudo systemctl start nginx@2",
+            "nginx: [emerg] bind() to 0.0.0.0:80 failed (98: Address already in use)") +
+            note("<code>SO_REUSEADDR</code> lets you rebind through a lingering TIME-WAIT after a restart; <code>SO_REUSEPORT</code> (Act III) lets workers share it on purpose. By default a port has one owner.") },
+        { key: "fd", name: "Sockets are file descriptors", kind: "the real ceiling", color: "--c-port",
+          cap: "Every connection is an fd. Concurrency is capped by <code>ulimit -n</code> (this demo host: 12), <b>not</b> by ports. This is the C10K problem.",
+          detail: term("ulimit -n", "12") +
+            term("# the accept that runs out of descriptors", "accept4(3, ...) = -1 EMFILE (Too many open files)") +
+            note("Real servers raise <code>ulimit -n</code> to 100k+ and size the listen backlog. The lever is file descriptors and memory — never “more ports”.") }
+      ]
+    },
+
+    /* ---------------- Act II — Outbound ---------------- */
+    {
+      num: "II", name: "Outbound",
+      dek: "Now nginx is the client, dialing an upstream. Which side runs out first?",
+      ss: "ss -tnp ; ss -tan state time-wait",
+      init: function () { state.sockets = []; state.ephem = 32768; },
+      actions: function () { return [
+        { id: "open", label: "Open an upstream connection", run: openII },
+        { id: "close", label: "Close one (→ TIME-WAIT)", run: closeII, enabled: countState("ESTAB") > 0 }
+      ]; },
+      ticket: function () { var a = countState("ESTAB"); return method("app") + '<span class="req-path">→ 10.0.0.9:<b>5432</b></span><span class="req-body">' + a + " outbound</span>"; },
+      counters: function () { var a = countState("ESTAB"), tw = countState("TIME-WAIT"); return chip("--c-socket", a + " outbound") + chip("--c-listen", tw + " time-wait") + chip("--c-port", (a + tw) + " / ~28k src ports"); },
+      stat: function () { return { html: "Each outbound connection borrows a local <b>source port</b>. Inbound, one port held unlimited sockets — outbound, every socket spends a port from a ~28k pool." }; },
+      cards: [
+        { key: "ephemeral", name: "Outbound flips the limit", kind: "ephemeral ports", color: "--c-port",
+          cap: "Each outbound connection borrows a local <b>ephemeral source port</b>. To a single destination you get ~28k of them; exhaust the range and <code>connect()</code> fails.",
+          detail: term("cat /proc/sys/net/ipv4/ip_local_port_range", "32768\t60999") +
+            term("# too many short-lived conns to one 10.0.0.9:5432", "connect() = -1 EADDRNOTAVAIL (Cannot assign requested address)") +
+            note("Inbound: one listening port, unlimited sockets. Outbound: each socket costs a source port, so the bottleneck moves to <b>your</b> side of the wire.") },
+        { key: "timewait", name: "TIME-WAIT holds the port", kind: "~60 s", color: "--c-listen",
+          cap: "A closed connection keeps its <b>source port</b> in TIME-WAIT for ~60s so late packets can't cross wires. Churn connections fast and you starve the pool.",
+          detail: term("ss -tan state time-wait | wc -l", "11026") +
+            note("The fix is connection <i>reuse</i> — HTTP keep-alive, a database pool — not more ports. A flood of short-lived connections to one upstream is the classic source-port squeeze.") }
+      ]
+    },
+
+    /* ---------------- Act III — Scale ---------------- */
+    {
+      num: "III", name: "Scale",
+      dek: "You need more throughput. Do you reach for more ports — or more sockets?",
+      ss: "ss -tlnp '( sport = :80 )'",
+      init: function () { state.workers = []; state.rr = 0; state.sockets = []; addWorker(); state.flash = null; },
+      actions: function () { return [
+        { id: "worker", label: "Add a worker (SO_REUSEPORT)", run: addWorkerAction },
+        { id: "accept", label: "Accept a client", run: acceptIII }
+      ]; },
+      ticket: function () { var w = state.workers.length; return method("nginx") + '<span class="req-path">' + w + " worker" + (w === 1 ? "" : "s") + " on :<b>80</b></span><span class=\"req-body\">SO_REUSEPORT</span>"; },
+      counters: function () { return chip("--c-listen", state.workers.length + " listening sockets") + chip("--c-socket", countState("ESTAB") + " connections") + chip("--c-port", "1 port · :80"); },
+      stat: function () { return { html: "With <b>SO_REUSEPORT</b>, every worker <code>bind()</code>s the same :80. Many <b>listening</b> sockets, one port — the kernel spreads incoming connections across them." }; },
+      cards: [
+        { key: "reuseport", name: "Many listeners, one port", kind: "SO_REUSEPORT", color: "--c-listen",
+          cap: "With <code>SO_REUSEPORT</code> each worker <code>bind()</code>s the same :80. N listening sockets, one port — the kernel load-balances new connections across them.",
+          detail: term("ss -tlnp '( sport = :80 )'",
+            'LISTEN 0 511 0.0.0.0:80 users:(("nginx",pid=812,fd=6))\n' +
+            'LISTEN 0 511 0.0.0.0:80 users:(("nginx",pid=813,fd=6))\n' +
+            'LISTEN 0 511 0.0.0.0:80 users:(("nginx",pid=814,fd=6))\n' +
+            "# one port, three listening sockets — one per worker") +
+            note("Each worker gets its own accept queue, so there is no single-accept lock across cores.") },
+        { key: "scale", name: "Ports don't scale — sockets do", kind: "use every core", color: "--c-socket",
+          cap: "You never add ports to handle load. You add workers, sockets, machines. The port is one address; throughput is sockets × cores × boxes.",
+          detail: note("If you ever catch yourself thinking “I need another port for more traffic”, it's the socket / fd / worker budget you actually mean. One <code>:80</code> can front an entire fleet behind a load balancer.") }
+      ]
+    }
   ];
 
-  function portDetail(p) {
-    var isTcp = p.proto === "tcp";
-    var f = fields([
-      'destination port <b style="color:var(--c-port)">' + esc(":" + p.dport) + "</b> <span class=\"k\">· 16 bits, one field of the " + esc(p.proto.toUpperCase()) + " header</span>",
-      "it names <i>which service</i>, never <i>which connection</i> — a socket is what a connection lives in",
-      "thousands of packets can carry :" + esc(p.dport) + " at once; the number alone is ambiguous"
-    ]);
-    var d = diagram((isTcp ? "TCP" : "UDP") + " header · destination port highlighted", "--c-port", isTcp ? TCP_ROWS : UDP_ROWS);
-    var t = term("tcpdump -ni eth0 '" + p.proto + " dst port " + p.dport + "'",
-      p.sip + "." + p.sport + " > " + HOST + "." + p.dport + ": " + (isTcp ? p.flags + " " : "UDP, ") + "length " + p.bytes + "\n" +
-      "10.0.0.55.54321 > " + HOST + "." + p.dport + ": [P.] length 512\n" +
-      "10.0.0.66.12345 > " + HOST + "." + p.dport + ": [P.] length 340\n" +
-      "# same :" + p.dport + " — three different sockets");
-    return f + d + t;
-  }
-  function tupleDetail(p) {
-    var f = fields([
-      '<span class="k">proto </span>' + esc(p.proto.toUpperCase()),
-      '<span class="k">src   </span>' + esc(p.sip + ":" + p.sport),
-      '<span class="k">dst   </span>' + esc(p.dip + ":") + '<b style="color:var(--c-port)">' + esc(p.dport) + "</b>",
-      "the kernel hashes this tuple to pick a socket — change any field and it's a different endpoint"
-    ]);
-    var d = tupleDiagram(p);
-    var t = p.proto === "tcp"
-      ? term("ss -tnp state established 'dst " + p.sip + ":" + p.sport + "'",
-          "ESTAB 0 0 " + HOST + ":" + p.dport + " " + p.sip + ":" + p.sport + "\n# exactly one socket matches all five fields")
-      : term("ss -unp 'dst " + p.sip + ":" + p.sport + "'",
-          "UNCONN 0 0 " + HOST + ":" + p.dport + " " + p.sip + ":" + p.sport + "\n# UDP: matched on local ip:port, peer optional");
-    return f + d + t;
-  }
-  function socketDetail(s, p) {
-    if (!s) {
-      return fields([
-        "no socket owns this 5-tuple",
-        "there is no endpoint here to hold the bytes — the port number pointed at nothing"
-      ]) + term("ss -tnp 'dst " + p.sip + ":" + p.sport + "'", "(no matching socket)");
+  function mk(o) { o.id = "s" + (idSeq++); o.fresh = true; return o; }
+  function method(name) { return '<span class="req-method">' + esc(name) + "</span>"; }
+
+  /* ---------- Act I actions ---------- */
+  function acceptI() {
+    var n = countKind("conn");
+    if (n >= CONN_CAP) {
+      state.flash = { reject: true, html: "<b>accept4(): Too many open files (24)</b> — the fd ceiling at <code>ulimit -n " + FD_LIMIT + "</code>. The port is fine; you're out of <b>sockets</b>." };
+      state.spot = "fd"; return;
     }
-    var f = fields([
-      'fd <b style="color:var(--c-socket)">' + s.fd + "</b> <span class=\"k\">· state " + esc(s.state) + "</span>",
-      '<span class="k">recv-buffer </span>' + s.recvq + ' B queued<span class="k">  ·  send-buffer </span>' + s.sendq + " B",
-      '<span class="k">owner </span>' + esc(s.proc) + " <span class=\"k\">(pid " + s.pid + ")</span>",
-      '<span class="k">local </span>' + esc(localOf(s)) + '<span class="k">   peer </span>' + esc(peerOf(s))
-    ]);
-    var t = term("ss -tiepm 'dst " + s.pip + ":" + s.pport + "'",
-      s.state + " " + s.recvq + " " + s.sendq + " " + localOf(s) + " " + peerOf(s) +
-      ' users:(("' + s.proc + '",pid=' + s.pid + ",fd=" + s.fd + "))\n" +
-      "  skmem:(r0,rb131072,t0,tb16384) cubic rtt:0.4/0.2");
-    var t2 = term("ls -l /proc/" + s.pid + "/fd/" + s.fd,
-      "lrwx------ 1 root root 64 " + s.proc + " " + s.fd + " -> socket:[" + (38000 + s.fd * 7) + "]");
-    return f + t + t2;
+    var client = "10.0.0." + rint(20, 250), sport = rint(49152, 65535), fd = 4 + n;
+    state.sockets.push(mk({ state: "ESTAB", kind: "conn", lip: HOST, lport: 80, pip: client, pport: sport, proc: "nginx", pid: NGINX_PID, fd: fd }));
+    state.flash = { html: "<code>accept()</code> → <b>fd " + fd + "</b> for " + client + ":" + sport + ". A brand-new socket — same port :80." };
+    state.spot = "socket";
   }
-  function listenDetail(p, table) {
-    var conns = table.filter(function (s) { return s.state === "ESTAB" && s.lport === p.dport; });
-    if (p.proto === "udp") {
-      var u = table.filter(function (s) { return s.state === "UNCONN" && s.lport === p.dport; })[0];
-      return fields([
-        u ? "one UDP socket on :" + p.dport + " serves <b>every</b> peer" : "no UDP socket on :" + p.dport,
-        "UDP is connectionless — there are no per-connection sockets, so :" + p.dport + " maps to a single endpoint"
-      ]) + term("ss -aunp | grep :" + p.dport,
-        u ? "UNCONN 0 0 " + localOf(u) + " 0.0.0.0:* users:((\"" + u.proc + "\",pid=" + u.pid + ",fd=" + u.fd + "))" : "(nothing bound)");
+  function closeI() {
+    for (var i = state.sockets.length - 1; i >= 0; i--) {
+      if (state.sockets[i].kind === "conn") { var s = state.sockets.splice(i, 1)[0];
+        state.flash = { html: "<code>close(fd " + s.fd + ")</code> — that one socket is gone. The port and every other connection are untouched." };
+        state.spot = null; return; }
     }
-    var listener = table.filter(function (s) { return s.state === "LISTEN" && s.lport === p.dport; })[0];
-    return fields([
-      listener
-        ? '<b>1</b> listening socket on :' + p.dport + '  →  <b>' + conns.length + '</b> connected socket' + (conns.length === 1 ? "" : "s") + ", all sharing :" + p.dport
-        : "nothing is listening on :" + p.dport,
-      "each connection has its own fd, buffers and 5-tuple — the port is shared, the sockets are not"
-    ]) + term("ss -tlnp | grep :" + p.dport,
-      listener ? "LISTEN 0 128 " + localOf(listener) + " 0.0.0.0:* users:((\"" + listener.proc + "\",pid=" + listener.pid + ",fd=" + listener.fd + "))" : "(no listener)") +
-      (conns.length ? term("ss -tnp state established '( sport = :" + p.dport + " )'",
-        conns.map(function (c) { return "ESTAB 0 0 " + localOf(c) + " " + peerOf(c) + '  fd=' + c.fd; }).join("\n")) : "");
+  }
+  function secondNginx() {
+    state.flash = { reject: true, html: "<b>nginx: [emerg] bind() to 0.0.0.0:80 failed (98: Address already in use)</b> — a port is bound <b>once</b>. This is not a connection limit." };
+    state.spot = "bind";
   }
 
-  /* ---------- DOM ---------- */
-  var stage = $("stage"), reqLabel = $("req-label"), tupleChips = $("tuple-chips");
-  var epWire = $("ep-wire"), epProc = $("ep-proc");
-  var phaseTag = $("phase-tag"), phaseNode = $("phase-node");
-  var tableBody = $("table-body"), tableStat = $("table-stat"), stackEl = $("stack");
-  var railDots = Array.prototype.slice.call(document.querySelectorAll(".rdot"));
+  /* ---------- Act II actions ---------- */
+  function openII() {
+    var active = countState("ESTAB"), tw = countState("TIME-WAIT");
+    if (active + tw >= PORT_CAP) {
+      state.flash = { reject: true, html: "<b>connect() to 10.0.0.9:5432 failed (99: Cannot assign requested address)</b> — no ephemeral <b>source ports</b> left; TIME-WAIT is still holding them." };
+      state.spot = "ephemeral"; return;
+    }
+    var sport = state.ephem++, fd = 5 + active;
+    state.sockets.push(mk({ state: "ESTAB", kind: "outbound", lip: HOST, lport: sport, pip: UP, pport: UP_PORT, proc: "app", pid: APP_PID, fd: fd }));
+    state.flash = { html: "<code>connect()</code> → local <b>:" + sport + "</b> → 10.0.0.9:5432. This socket just spent one ephemeral <b>source</b> port." };
+    state.spot = "ephemeral";
+  }
+  function closeII() {
+    for (var i = state.sockets.length - 1; i >= 0; i--) {
+      var s = state.sockets[i];
+      if (s.state === "ESTAB") { s.state = "TIME-WAIT"; s.kind = "timewait"; s.proc = null; s.pid = null; s.fd = null; s.fresh = true;
+        state.flash = { html: "<code>close()</code> → the socket enters <b>TIME-WAIT</b> for ~60s, still holding source port :" + s.lport + "." };
+        state.spot = "timewait"; return; }
+    }
+  }
 
-  // build the anatomy stack scaffolding once
-  var rowEls = {};
-  STACK.forEach(function (row) {
-    var el = document.createElement("div");
-    el.className = "lrow";
-    el.style.setProperty("--c", "var(" + row.color + ")");
-    el.innerHTML =
-      '<div class="lrow-card">' +
-        '<button class="lrow-head" aria-expanded="false">' +
+  /* ---------- Act III actions ---------- */
+  function addWorker() {
+    var pid = NGINX_PID + state.workers.length;
+    state.workers.push({ pid: pid, fd: 6 });
+    state.sockets.push(mk({ state: "LISTEN", kind: "listen", lip: "0.0.0.0", lport: 80, pip: "0.0.0.0", pport: "*", proc: "nginx", pid: pid, fd: 6 }));
+    return pid;
+  }
+  function addWorkerAction() {
+    if (state.workers.length >= 6) { state.flash = { html: "Six workers is plenty for the demo — the point stands at any N: they all share :80." }; state.spot = "reuseport"; return; }
+    var pid = addWorker();
+    state.flash = { html: "worker <b>pid " + pid + "</b> ran <code>bind(:80)</code> with <b>SO_REUSEPORT</b> — listening socket #" + state.workers.length + " on the same port." };
+    state.spot = "reuseport";
+  }
+  function acceptIII() {
+    if (!state.workers.length) addWorker();
+    var w = state.workers[state.rr % state.workers.length]; state.rr++;
+    var client = "10.0.0." + rint(20, 250), sport = rint(49152, 65535), fd = 10 + countState("ESTAB");
+    state.sockets.push(mk({ state: "ESTAB", kind: "conn", lip: HOST, lport: 80, pip: client, pport: sport, proc: "nginx", pid: w.pid, fd: fd }));
+    state.flash = { html: "the kernel handed this accept to <b>worker pid " + w.pid + "</b>. All workers share :80; the load spreads across them." };
+    state.spot = "reuseport";
+  }
+
+  /* ============================================================ RENDER ============================================================ */
+  var kicker = $("act-kicker"), dek = $("scenario"), ticketEl = $("req-label"),
+      counters = $("counters"), tableBody = $("table-body"), tableStat = $("table-stat"),
+      ssCmd = $("ss-cmd"), figNum = $("fig-num"), actionsEl = $("actions"), stackEl = $("stack");
+  var actDots = Array.prototype.slice.call(document.querySelectorAll(".rdot[data-act]"));
+
+  var state = { act: 0, sockets: [], flash: null, spot: null, ephem: 32768, workers: [], rr: 0, cardEls: {} };
+
+  function sockRowHTML(s) {
+    var proc = (s.state === "TIME-WAIT")
+      ? '<span class="sfd">—</span>'
+      : '<span class="sproc-name">' + esc(s.proc) + '</span> <span class="sfd">fd=' + s.fd + "</span>";
+    return '<span class="srow-state">' + esc(s.state) + "</span>" +
+      '<span class="local">' + esc(s.lip) + ':<span class="lport">' + s.lport + "</span></span>" +
+      '<span class="peer">' + esc(peerOf(s)) + "</span>" +
+      '<span class="sproc">' + proc + "</span>";
+  }
+  function renderTable() {
+    tableBody.replaceChildren();
+    state.sockets.forEach(function (s) {
+      var el = document.createElement("div");
+      el.className = "srow st-" + s.state + (s.fresh ? " fresh" : "");
+      el.setAttribute("role", "listitem");
+      el.innerHTML = sockRowHTML(s);
+      tableBody.appendChild(el);
+      s.fresh = false;
+    });
+  }
+
+  function renderActions(list) {
+    actionsEl.replaceChildren();
+    list.forEach(function (a) {
+      var b = document.createElement("button");
+      b.className = "ghost act-btn" + (a.danger ? " danger" : "");
+      b.textContent = a.label;
+      b.disabled = a.enabled === false;
+      b.addEventListener("click", function () { a.run(); render(); });
+      actionsEl.appendChild(b);
+    });
+  }
+
+  function renderCards(cards) {
+    stackEl.replaceChildren(); state.cardEls = {};
+    cards.forEach(function (c) {
+      var el = document.createElement("div");
+      el.className = "lrow"; el.style.setProperty("--c", "var(" + c.color + ")");
+      el.innerHTML =
+        '<div class="lrow-card"><button class="lrow-head" aria-expanded="false">' +
           '<span class="lrow-sw"></span>' +
-          '<span class="lrow-main"><span class="lrow-name">' + esc(row.name) +
-            ' <b class="lkind">' + esc(row.kind) + "</b><span class=\"lrow-now\">◂ now</span></span>" +
-            '<span class="lrow-cap">' + esc(row.cap) + "</span></span>" +
-          '<span class="lrow-bytes"></span>' +
+          '<span class="lrow-main"><span class="lrow-name">' + esc(c.name) + ' <b class="lkind">' + esc(c.kind) + "</b><span class=\"lrow-now\">◂ why</span></span>" +
+          '<span class="lrow-cap">' + c.cap + "</span></span>" +
           '<span class="lrow-chev" aria-hidden="true">▸</span>' +
         "</button>" +
-        '<div class="lrow-detail"><div class="lrow-detail-in"></div></div>' +
-      "</div>";
-    stackEl.appendChild(el);
-    rowEls[row.key] = el;
-    el.querySelector(".lrow-head").addEventListener("click", function () { toggleRow(row.key); });
-  });
-
-  var CHIPS = [
-    { key: "proto", cls: "proto" }, { key: "sip", cls: "sip" }, { key: "sport", cls: "sport" },
-    { key: "dip", cls: "dip" }, { key: "dport", cls: "dport" }
-  ];
-
-  /* ---------- state ---------- */
-  var R = resolve(estabData());   // deterministic-ish anchor for first load
-  var step = 0, selectedId = R.deliverId, playTimer = null;
-  var sockRows = {}, newRowEl = null;
-
-  function litChips(s) {
-    if (s < 2) return {};
-    if (s === 2) return { proto: 1, dip: 1 };
-    if (s === 3) return { proto: 1, dip: 1, dport: 1 };
-    return { proto: 1, dip: 1, dport: 1, sip: 1, sport: 1 };
-  }
-
-  function makeRow(sock) {
-    var el = document.createElement("div");
-    el.setAttribute("role", "button");
-    el.setAttribute("tabindex", "0");
-    el.setAttribute("aria-label", "Inspect socket: " + sock.state + " " + localOf(sock) + " peer " + peerOf(sock) + ", " + sock.proc + " fd " + sock.fd);
-    el.innerHTML =
-      '<span class="srow-state">' + esc(sock.state) + "</span>" +
-      '<span class="num recvq">' + sock.recvq + "</span>" +
-      '<span class="num">' + sock.sendq + "</span>" +
-      '<span class="local">' + esc(sock.lip) + ':<span class="lport">' + sock.lport + "</span></span>" +
-      '<span class="peer">' + esc(peerOf(sock)) + "</span>" +
-      '<span class="sproc"><span class="sproc-name">' + esc(sock.proc) + '</span> <span class="sfd">fd=' + sock.fd + "</span></span>";
-    el.addEventListener("click", function () { selectSocket(sock.id); });
-    el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectSocket(sock.id); } });
-    return el;
-  }
-
-  function applyPacket() {
-    // packet pill
-    reqLabel.innerHTML =
-      '<span class="req-method' + (R.packet.proto === "udp" ? " udp" : "") + '">' + esc(R.packet.proto.toUpperCase()) + "</span>" +
-      '<span class="req-path">' + esc(R.packet.sip + ":" + R.packet.sport + " → " + R.packet.dip + ":") + "<b>" + esc(R.packet.dport) + "</b></span>" +
-      '<span class="req-body">' + esc(R.packet.kind) + "</span>";
-    reqLabel.classList.remove("pulse"); void reqLabel.offsetWidth; reqLabel.classList.add("pulse");
-
-    // tuple chips
-    tupleChips.innerHTML = [
-      '<span class="tchip proto">' + esc(R.packet.proto.toUpperCase()) + "</span>",
-      '<span class="tchip sip">src ' + esc(R.packet.sip) + "</span>",
-      '<span class="tchip sport">:' + esc(R.packet.sport) + "</span>",
-      '<span class="tchip dip">dst ' + esc(R.packet.dip) + "</span>",
-      '<span class="tchip dport">:' + esc(R.packet.dport) + "</span>"
-    ].join("");
-
-    // socket table rows
-    tableBody.replaceChildren();
-    sockRows = {};
-    R.table.forEach(function (sock) { var el = makeRow(sock); tableBody.appendChild(el); sockRows[sock.id] = { el: el, sock: sock }; });
-    newRowEl = R.newSocket ? makeRow(R.newSocket) : null;
-
-    // static anatomy details
-    setBytes("port", "16 bits");
-    setDetail("port", portDetail(R.packet));
-    setBytes("tuple", "~104 bits");
-    setDetail("tuple", tupleDetail(R.packet));
-    setBytes("listen", listenBadge());
-    setDetail("listen", listenDetail(R.packet, R.table));
-    refreshSocketDetail();
-    STACK.forEach(function (r) { setRowOpen(r.key, false); });
-  }
-
-  function listenBadge() {
-    if (R.packet.proto === "udp") return "1 : ∞";
-    var conns = R.table.filter(function (s) { return s.state === "ESTAB" && s.lport === R.packet.dport; }).length;
-    var hasL = R.table.some(function (s) { return s.state === "LISTEN" && s.lport === R.packet.dport; });
-    return hasL ? "1 : " + conns : "0 : 0";
-  }
-  function selectedSocket() {
-    if (selectedId === "new") return R.newSocket;
-    var hit = sockRows[selectedId];
-    return hit ? hit.sock : null;
-  }
-  function refreshSocketDetail() {
-    var s = selectedSocket();
-    setBytes("socket", s ? "fd " + s.fd : "—");
-    setDetail("socket", socketDetail(s, R.packet));
-  }
-  function setDetail(key, html) { rowEls[key].querySelector(".lrow-detail-in").innerHTML = html; }
-  function setBytes(key, txt) { rowEls[key].querySelector(".lrow-bytes").textContent = txt; }
-
-  function selectSocket(id) {
-    selectedId = id;
-    refreshSocketDetail();
-    STACK.forEach(function (r) { setRowOpen(r.key, r.key === "socket"); });  // reveal the endpoint you picked
-    render();
-  }
-
-  /* ---------- narrowing + narration ---------- */
-  function rowClassFor(sock) {
-    var s = step, o = R.outcome;
-    if (o === "drop") return s >= 2 ? "dimmed" : "";
-    if (s <= 2) return "";
-    if (!R.bucketIds[sock.id]) return "dimmed";
-    if (s === 3) return "candidate";
-    if (sock.id === R.matchId) {
-      if (o === "accept") return s >= 5 ? "candidate" : "match will-accept";
-      return "match";
-    }
-    return "dimmed";
-  }
-  function paintTable() {
-    R.table.forEach(function (sock) {
-      var entry = sockRows[sock.id], el = entry.el;
-      var cls = rowClassFor(sock);
-      el.className = "srow st-" + sock.state + (cls ? " " + cls : "") + (sock.id === selectedId ? " selected" : "");
-      var deliverHot = R.outcome === "deliver" && sock.id === R.matchId && step >= 5;
-      var rq = el.querySelector(".recvq");
-      rq.textContent = deliverHot ? sock.recvq + R.packet.bytes : sock.recvq;
-      rq.classList.toggle("hot", deliverHot);
+        '<div class="lrow-detail"><div class="lrow-detail-in">' + c.detail + "</div></div></div>";
+      stackEl.appendChild(el); state.cardEls[c.key] = el;
+      el.querySelector(".lrow-head").addEventListener("click", function () { toggleCard(c.key); });
     });
-    // the socket minted by an accepted SYN appears only once it's created —
-    // slotted next to its siblings so the shared-port family stays together
-    if (R.newSocket) {
-      var show = R.outcome === "accept" && step >= 5;
-      if (show) {
-        var justAdded = !newRowEl.parentNode;
-        if (justAdded) {
-          var anchor = null;
-          R.table.forEach(function (s) { if (s.lport === R.packet.dport) anchor = sockRows[s.id].el; });
-          if (anchor) anchor.after(newRowEl); else tableBody.appendChild(newRowEl);
-          if (newRowEl.scrollIntoView) newRowEl.scrollIntoView({ block: "nearest" });
-        }
-        newRowEl.className = "srow st-ESTAB match" + (selectedId === "new" ? " selected" : "") + (justAdded ? " fresh" : "");
-      } else if (newRowEl.parentNode) { tableBody.removeChild(newRowEl); }
-    }
   }
-
-  function statHTML() {
-    var s = step, o = R.outcome, p = R.packet, PROTO = p.proto.toUpperCase();
-    var bucket = R.table.filter(function (x) { return R.bucketIds[x.id]; });
-    if (s === 0) return { html: "A packet on the wire. It carries a destination port — but a port is just a <b>number</b>, not a place to put data." };
-    if (s === 1) return { html: "The link layer accepts the frame for this NIC. Nothing socket-specific has happened yet." };
-    if (s === 2) {
-      if (o === "drop") return { reject: true, html: "Destination IP <b>" + esc(p.dip) + "</b> isn't this host — the packet is dropped. The port never even mattered." };
-      return { html: "Destination IP <b>" + esc(p.dip) + "</b> is this host. Protocol: <b>" + PROTO + "</b>. Now hand it up to " + PROTO + "." };
-    }
-    if (s === 3) {
-      if (bucket.length === 0) return { reject: true, html: "Nothing is bound to <b>" + PROTO + ":" + esc(p.dport) + "</b> — there's no socket to look up." };
-      return { html: "<b>" + bucket.length + "</b> socket" + (bucket.length === 1 ? "" : "s") + " share <b>" + PROTO + ":" + esc(p.dport) + "</b>. The port got us to the bucket — not to a connection." };
-    }
-    if (s === 4) {
-      if (o === "drop") return { reject: true, html: "Already dropped — this packet was never for us." };
-      if (o === "deliver" && p.proto === "tcp") return { html: "Best match: the established socket for <b>" + esc(p.sip + ":" + p.sport) + "</b>. Same :" + esc(p.dport) + " — but the full 5-tuple picks <b>this connection's own socket</b>." };
-      if (o === "deliver") return { html: "UDP is connectionless: the single socket on :" + esc(p.dport) + " takes datagrams from <b>every</b> peer." };
-      if (o === "accept") return { html: "No established socket yet — this SYN matches the <b>LISTEN</b> socket. The kernel will mint a brand-new socket for it." };
-      return { reject: true, html: "No socket owns this 5-tuple. The kernel replies " + (p.proto === "tcp" ? "<b>RST</b>" : "<b>ICMP port unreachable</b>") + " — an “open port” with no socket doesn't exist." };
-    }
-    if (s === 5) {
-      if (o === "deliver") { var m = R.table.filter(function (x) { return x.id === R.matchId; })[0]; return { html: "<b>" + p.bytes + " B</b> copied into fd <b>" + m.fd + "</b>'s receive buffer (Recv-Q → " + (m.recvq + p.bytes) + "). <b>This</b> is the endpoint that holds the data." }; }
-      if (o === "accept") return { html: "New socket <b>fd " + R.newSocket.fd + "</b> created — same local :" + esc(p.dport) + ", peer <b>" + esc(peerOf(R.newSocket)) + "</b>. The listener stays free for the next client." };
-      return { reject: true, html: "No buffer to fill — there was no socket. The rejection goes back to <b>" + esc(p.sip) + "</b>." };
-    }
-    // s === 6
-    if (o === "deliver" || o === "accept") { var d = R.deliverId === "new" ? R.newSocket : R.table.filter(function (x) { return x.id === R.deliverId; })[0]; return { html: "<b>" + esc(d.proc) + "</b> wakes from " + (o === "accept" ? "accept()" : "recv()") + " and reads fd <b>" + d.fd + "</b>. The socket delivered the bytes; the port only pointed the way." }; }
-    return { reject: true, html: "No process is woken. The port number existed; the endpoint never did." };
-  }
-
-  var COLOR_FOR = { port: "--c-port", tuple: "--c-tuple", socket: "--c-socket", listen: "--c-listen" };
-  function activeColorVar() {
-    if (R.outcome === "reset" || R.outcome === "unreach" || R.outcome === "drop") {
-      if ((R.outcome === "drop" && step >= 2) || step >= 4) return "--c-reject";
-    }
-    var ent = SPOTLIGHT[step];
-    return ent ? COLOR_FOR[ent] : "--accent";
-  }
-  var TAGWORD = ["on the wire", "link layer", "network", "port lookup", "demultiplex", "deliver", "delivered"];
-  function tagWord() {
-    var s = step, o = R.outcome;
-    if (o === "drop") return s >= 2 ? "dropped" : TAGWORD[s];
-    if (s === 4) return o === "accept" ? "accept" : (o === "deliver" ? "demultiplex" : "no socket");
-    if (s === 5) return o === "accept" ? "new socket" : (o === "deliver" ? "deliver" : "rejected");
-    if (s === 6) return (o === "deliver" || o === "accept") ? "delivered" : "no process";
-    if (s === 3 && Object.keys(R.bucketIds).length === 0) return "no port";
-    return TAGWORD[s];
+  function setCardOpen(key, open) { var el = state.cardEls[key]; if (!el) return; el.classList.toggle("open", open); el.querySelector(".lrow-head").setAttribute("aria-expanded", open ? "true" : "false"); }
+  function toggleCard(key) {
+    var willOpen = !state.cardEls[key].classList.contains("open");
+    Object.keys(state.cardEls).forEach(function (k) { if (k !== key) setCardOpen(k, false); });
+    setCardOpen(key, willOpen);
   }
 
   function render() {
-    var node = NODES[step], colorVar = activeColorVar();
+    var A = ACTS[state.act];
+    kicker.textContent = "Act " + A.num + " · " + A.name;
+    dek.textContent = A.dek;
+    figNum.textContent = String(state.act + 1);
+    ssCmd.textContent = A.ss;
 
-    // endpoints
-    epWire.classList.toggle("active", step <= 1);
-    epProc.classList.toggle("active", step === 6 && (R.outcome === "deliver" || R.outcome === "accept"));
-
-    // phase
-    phaseTag.textContent = tagWord();
-    phaseTag.style.color = "var(" + colorVar + ")";
-    phaseNode.innerHTML = node.icon + " <b>" + esc(node.name) + '</b> <span class="ps">' + esc(node.sub) + "</span>";
-
-    // rail
-    railDots.forEach(function (dot, i) {
-      var cur = i === step;
-      dot.classList.toggle("current", cur);
-      dot.classList.toggle("done", i < step);
-      dot.setAttribute("aria-current", cur ? "step" : "false");
-      dot.setAttribute("r", cur ? "6.5" : "4.5");
-      dot.style.fill = cur ? "var(" + colorVar + ")" : "";
-      dot.style.color = cur ? "var(" + colorVar + ")" : "";   // drives the halo
+    actDots.forEach(function (d, i) {
+      var cur = i === state.act;
+      d.classList.toggle("current", cur);
+      d.classList.toggle("done", i < state.act);
+      d.setAttribute("r", cur ? "6.5" : "5");
+      d.style.fill = cur ? "var(--accent)" : "";
+      d.style.color = cur ? "var(--accent)" : "";
+      d.setAttribute("aria-current", cur ? "step" : "false");
     });
 
-    // tuple chips
-    var lit = litChips(step);
-    Array.prototype.forEach.call(tupleChips.children, function (chip, i) { chip.classList.toggle("lit", !!lit[CHIPS[i].key]); });
+    ticketEl.innerHTML = A.ticket();
+    ticketEl.classList.remove("pulse"); void ticketEl.offsetWidth; ticketEl.classList.add("pulse");
+    counters.innerHTML = A.counters();
 
-    // socket table + stat
-    paintTable();
-    var st = statHTML();
+    renderTable();
+
+    var st = state.flash || A.stat();
     tableStat.innerHTML = st.html;
     tableStat.classList.toggle("reject", !!st.reject);
 
-    // spotlight the active anatomy row
-    var ent = SPOTLIGHT[step];
-    STACK.forEach(function (r) { rowEls[r.key].classList.toggle("spotlight", r.key === ent); });
+    renderActions(A.actions());
 
-    $("prev").disabled = step === 0;
-    $("next").disabled = step === MAXSTEP;
-  }
+    // spotlight + auto-open the relevant card
+    Object.keys(state.cardEls).forEach(function (k) {
+      var isSpot = k === state.spot;
+      state.cardEls[k].classList.toggle("spotlight", isSpot);
+      if (isSpot) setCardOpen(k, true);
+    });
 
-  /* ---------- expand / collapse an anatomy row ---------- */
-  function setRowOpen(key, open) {
-    rowEls[key].classList.toggle("open", open);
-    rowEls[key].querySelector(".lrow-head").setAttribute("aria-expanded", open ? "true" : "false");
-  }
-  function toggleRow(key) {
-    var willOpen = !rowEls[key].classList.contains("open");
-    if (willOpen) STACK.forEach(function (r) { if (r.key !== key) setRowOpen(r.key, false); });
-    setRowOpen(key, willOpen);
+    $("prev").disabled = state.act === 0;
+    $("next").disabled = state.act === ACTS.length - 1;
   }
 
-  /* ---------- navigation ---------- */
-  function goTo(s) { stopPlay(); step = clamp(s, 0, MAXSTEP); render(); }
-  function stepBy(d) { goTo(step + d); }
-  function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; $("replay").classList.remove("playing"); } }
-  function replay() {
-    stopPlay(); step = 0; render();
-    $("replay").classList.add("playing");
-    playTimer = setInterval(function () { if (step >= MAXSTEP) { stopPlay(); return; } step += 1; render(); }, 850);
-  }
-  function setPacket(packet) {
-    stopPlay();
-    R = resolve(packet);
-    selectedId = R.deliverId;
-    step = 0;
-    applyPacket();
+  /* ---------- act navigation ---------- */
+  function loadAct(i) {
+    state.act = clamp(i, 0, ACTS.length - 1);
+    state.sockets = []; state.flash = null; state.spot = null; state.ephem = 32768; state.workers = []; state.rr = 0;
+    ACTS[state.act].init();
+    renderCards(ACTS[state.act].cards);
     render();
+    stage.scrollTo({ top: 0, behavior: "smooth" });
   }
+  var stage = $("stage");
+  $("prev").addEventListener("click", function () { if (state.act > 0) loadAct(state.act - 1); });
+  $("next").addEventListener("click", function () { if (state.act < ACTS.length - 1) loadAct(state.act + 1); });
+  $("reset").addEventListener("click", function () { loadAct(state.act); });
 
-  railDots.forEach(function (dot) {
-    var s = parseInt(dot.dataset.step, 10), node = NODES[s];
-    dot.setAttribute("tabindex", "0");
-    dot.setAttribute("role", "button");
-    dot.setAttribute("aria-label", "Go to step " + (s + 1) + ": " + node.name + ", " + node.sub);
-    dot.addEventListener("click", function () { goTo(s); });
-    dot.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goTo(s); } });
+  actDots.forEach(function (d) {
+    var i = parseInt(d.dataset.act, 10), A = ACTS[i];
+    d.setAttribute("tabindex", "0");
+    d.setAttribute("role", "button");
+    d.setAttribute("aria-label", "Go to Act " + A.num + ": " + A.name);
+    d.addEventListener("click", function () { loadAct(i); });
+    d.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); loadAct(i); } });
   });
-  $("prev").addEventListener("click", function () { stepBy(-1); });
-  $("next").addEventListener("click", function () { stepBy(1); });
-  $("replay").addEventListener("click", replay);
-  $("new-req").addEventListener("click", function () { setPacket(pick(CATALOG)()); });
 
   /* ---------- guide ---------- */
   var help = $("help"), helpStart = $("help-start"), helpCard = help.querySelector(".sheet-card"), returnFocusTo = null;
@@ -547,14 +362,13 @@
     if (!help.hidden) { if (e.key === "Escape") closeHelp(); else keepFocusInHelp(e); return; }
     var tag = document.activeElement ? document.activeElement.tagName : "";
     if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
-    if (e.key === "ArrowRight") { e.preventDefault(); stepBy(1); }
-    else if (e.key === "ArrowLeft") { e.preventDefault(); stepBy(-1); }
-    else if (e.key === "Home") { e.preventDefault(); goTo(0); }
-    else if (e.key === "End") { e.preventDefault(); goTo(MAXSTEP); }
+    if (e.key === "ArrowRight") { e.preventDefault(); if (state.act < ACTS.length - 1) loadAct(state.act + 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); if (state.act > 0) loadAct(state.act - 1); }
+    else if (e.key === "Home") { e.preventDefault(); loadAct(0); }
+    else if (e.key === "End") { e.preventDefault(); loadAct(ACTS.length - 1); }
   });
 
   /* ---------- init ---------- */
-  applyPacket();
-  render();
+  loadAct(0);
   openHelp(true);
 })();
