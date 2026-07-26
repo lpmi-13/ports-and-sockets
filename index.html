@@ -4,110 +4,106 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="An interactive visual guide to ports and sockets in the Linux networking stack.">
-  <meta name="theme-color" content="#172225">
-
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Ports ≠ Sockets">
-  <meta property="og:title" content="Ports ≠ Sockets — Linux networking, visually">
-  <meta property="og:description" content="See why a port is only a number, while a socket is the kernel endpoint that does the communicating.">
-  <meta property="og:image" content="/social-card.svg">
-  <meta property="og:image:type" content="image/svg+xml">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Ports are not sockets: a visual guide to Linux networking">
-
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Ports ≠ Sockets — Linux networking, visually">
-  <meta name="twitter:description" content="See why a port is only a number, while a socket is the kernel endpoint that does the communicating.">
-  <meta name="twitter:image" content="/social-card.svg">
-  <meta name="twitter:image:alt" content="Ports are not sockets: a visual guide to Linux networking">
-
-  <title>Ports ≠ Sockets</title>
+  <meta name="theme-color" content="#0b1114">
+  <title>Ports ≠ Sockets — an interactive explainer</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="site-header">
-    <a class="brand" href="#top" aria-label="Ports and sockets, home"><span class="brand-mark">P≠S</span><span>Linux networking, visually</span></a>
-    <nav aria-label="Main navigation">
-      <a href="#distinction">The distinction</a><a href="#connection-lab">Connection lab</a><a href="#examples">Why it matters</a>
-    </nav>
+  <header class="topbar">
+    <a class="brand" href="#intro" aria-label="Ports and sockets, home"><span class="brand-mark">P≠S</span><span>Ports ≠ Sockets</span></a>
+    <div class="progress" aria-label="Progress"><i id="progressBar"></i></div>
+    <span class="chapter-count"><b id="chapterNumber">01</b> / 04</span>
   </header>
 
-  <main id="top">
-    <section class="hero">
-      <div class="eyebrow">A visual field guide</div>
-      <h1>A port is a <em>number.</em><br>A socket is the <em>endpoint.</em></h1>
-      <p class="lede">They work together, but they are not interchangeable. Follow a packet through Linux and see why one port can support thousands of independent conversations.</p>
-      <a class="primary-button" href="#distinction">Start with the difference <span aria-hidden="true">↓</span></a>
-      <div class="hero-diagram" aria-label="A port number being resolved to a socket">
-        <div class="packet-card"><span>TCP header</span><strong>:80</strong><small>16-bit destination port</small></div>
-        <div class="flow"><i></i><span>kernel lookup</span><i></i></div>
-        <div class="socket-card"><span>socket</span><div class="socket-icon"><b></b><b></b><b></b></div><small>state · buffers · owner</small></div>
-      </div>
-    </section>
+  <main>
+    <aside class="rail" aria-label="Chapters">
+      <p>Explore the idea</p>
+      <nav>
+        <button class="chapter-link active" data-target="intro"><b>01</b><span>Meet the two</span></button>
+        <button class="chapter-link" data-target="lookup"><b>02</b><span>Follow a packet</span></button>
+        <button class="chapter-link" data-target="connections"><b>03</b><span>Multiply sockets</span></button>
+        <button class="chapter-link" data-target="remember"><b>04</b><span>Keep the model</span></button>
+      </nav>
+      <div class="rail-note"><span class="live-dot"></span>Interactive model<br><small>No packets are sent</small></div>
+    </aside>
 
-    <section class="section" id="distinction">
-      <div class="section-heading"><span>01 / The distinction</span><h2>Door number or occupied room?</h2><p>A port helps the kernel find an application. A socket is the kernel object through which that application communicates.</p></div>
-      <div class="compare-grid">
-        <article class="concept port-concept">
-          <div class="concept-label">PORT</div><div class="big-number">80</div>
-          <h3>A label in a packet</h3><p>A 16-bit integer from <code>0</code> to <code>65535</code>, interpreted separately for TCP and UDP.</p>
-          <ul><li>Travels in the TCP or UDP header</li><li>Helps select a service</li><li>Has no buffers, state, or owner</li></ul>
-        </article>
-        <div class="not-equal" aria-hidden="true">≠</div>
-        <article class="concept socket-concept">
-          <div class="concept-label">SOCKET</div><div class="socket-window"><span>fd 6</span><span class="pulse"></span></div>
-          <h3>A living kernel object</h3><p>Created by <code>socket()</code>, exposed to a process as a file descriptor, and optionally associated with an address by <code>bind()</code>.</p>
-          <ul><li>Owns send and receive buffers</li><li>Tracks protocol state</li><li>Has a lifetime and process owner</li></ul>
-        </article>
-      </div>
-      <aside class="analogy"><span class="analogy-icon">⌂</span><div><strong>The apartment analogy</strong><p>The IP address is the building. A port is the apartment number painted on a door. A socket is the actual leased apartment: it has an occupant, working mailbox, and a particular conversation with a visitor.</p></div></aside>
-    </section>
-
-    <section class="section dark-section" id="connection-lab">
-      <div class="section-heading"><span>02 / Connection lab</span><h2>One port. Many sockets.</h2><p>Accept clients and watch Linux demultiplex every connection using its full identity.</p></div>
-      <div class="lab">
-        <div class="server-panel">
-          <div class="server-top"><span class="status-dot"></span><div><small>LISTENING SOCKET</small><strong>192.168.1.10:<mark>80</mark></strong></div><code>fd 6</code></div>
-          <div class="server-body"><div class="rack"></div><div><span>nginx · pid 1234</span><small>0.0.0.0:80 → 0.0.0.0:*</small></div></div>
+    <div class="experience">
+      <section class="chapter active" id="intro" data-chapter="1" aria-labelledby="intro-title">
+        <div class="copy">
+          <span class="kicker">01 · Start here</span>
+          <h1 id="intro-title">Same neighborhood.<br><em>Different things.</em></h1>
+          <p>A port is a number used for lookup. A socket is the living endpoint that receives the data.</p>
+          <button class="action next" data-next="lookup">Follow a packet <span>→</span></button>
         </div>
-        <button class="accept-button" id="acceptClient"><span>+</span> Accept a client</button>
-        <div class="connections" id="connections" aria-live="polite"></div>
-        <div class="tuple-readout" id="tupleReadout"><small>SELECT A CONNECTION</small><div><span>source IP</span><span>source port</span><span>destination IP</span><span>destination port</span><span>protocol</span></div><code>—</code></div>
-      </div>
-    </section>
+        <div class="intro-viz" aria-label="Comparison of a port and socket">
+          <button class="object port-object selected" data-object="port" aria-pressed="true">
+            <small>PACKET FIELD</small><strong>:80</strong><span>port</span>
+          </button>
+          <div class="not-equal">≠</div>
+          <button class="object socket-object" data-object="socket" aria-pressed="false">
+            <small>KERNEL OBJECT</small><div class="socket-glyph"><i></i><i></i><i></i></div><span>socket</span>
+          </button>
+          <div class="object-caption" id="objectCaption"><b>A label, not a container.</b><span>It has no buffer, state, or process owner.</span></div>
+        </div>
+      </section>
 
-    <section class="section packet-journey">
-      <div class="section-heading"><span>03 / Packet journey</span><h2>What Linux actually does</h2></div>
-      <ol class="steps">
-        <li><b>1</b><div><h3>Read the header</h3><p>Extract source and destination addresses, ports, and protocol.</p></div></li>
-        <li><b>2</b><div><h3>Look up the socket</h3><p>Match the packet’s tuple against kernel socket tables.</p></div></li>
-        <li><b>3</b><div><h3>Queue the bytes</h3><p>Place payload in that socket’s receive buffer.</p></div></li>
-        <li><b>4</b><div><h3>Wake the process</h3><p>Notify the process waiting on the file descriptor.</p></div></li>
-      </ol>
-      <div class="key-idea"><span>KEY IDEA</span><p>The port is a <strong>lookup key.</strong> The socket is the <strong>place the data goes.</strong></p></div>
-    </section>
+      <section class="chapter" id="lookup" data-chapter="2" aria-labelledby="lookup-title" hidden>
+        <div class="copy compact">
+          <span class="kicker">02 · Packet lookup</span>
+          <h2 id="lookup-title">Give Linux<br>an address.</h2>
+          <p>Change the destination, then send the packet through the kernel.</p>
+          <div class="controls">
+            <label>Protocol<select id="protocol"><option>TCP</option><option>UDP</option></select></label>
+            <label>Port<input id="portInput" type="number" min="0" max="65535" value="80"></label>
+          </div>
+          <button class="action" id="sendPacket">Send packet <span>→</span></button>
+        </div>
+        <div class="lookup-viz">
+          <div class="route" aria-hidden="true"><i></i></div>
+          <div class="packet" id="packet"><small>DESTINATION</small><b>192.168.1.10:<mark>80</mark></b><span>TCP</span></div>
+          <div class="kernel"><span class="kernel-label">LINUX KERNEL · SOCKET TABLE</span>
+            <div class="socket-row" data-port="22"><code>TCP :22</code><span>sshd</span><i></i></div>
+            <div class="socket-row target" data-port="80"><code>TCP :80</code><span>nginx</span><i></i></div>
+            <div class="socket-row" data-port="53"><code>UDP :53</code><span>resolved</span><i></i></div>
+          </div>
+          <div class="lookup-status" id="lookupStatus"><span>READY</span>Choose a destination and send.</div>
+        </div>
+      </section>
 
-    <section class="section" id="examples">
-      <div class="section-heading"><span>04 / Why it matters</span><h2>Four mysteries, explained.</h2></div>
-      <div class="example-grid">
-        <article><span class="example-no">01</span><h3>1,000 web clients</h3><p>One listening socket on port 80 can create thousands of established sockets. Each client has a different 5-tuple, so every byte reaches the right conversation.</p><code>same :80 · unique peers</code></article>
-        <article><span class="example-no">02</span><h3><code>SO_REUSEPORT</code></h3><p>Multiple listening sockets may intentionally bind the same address and port. Linux distributes new flows between them for scalable server workloads.</p><code>many sockets · one :8080</code></article>
-        <article><span class="example-no">03</span><h3><code>TIME_WAIT</code></h3><p>The kernel retains a recently closed TCP connection tuple—not a universally “locked port.” Whether reuse is possible depends on the new tuple and bind rules.</p><code>tuple retained · not a lock</code></article>
-        <article><span class="example-no">04</span><h3>Network namespaces</h3><p>Each namespace has its own networking stack and socket tables. Two containers can both listen on <code>0.0.0.0:80</code> without colliding.</p><code>same :80 · separate worlds</code></article>
-      </div>
-    </section>
+      <section class="chapter" id="connections" data-chapter="3" aria-labelledby="connections-title" hidden>
+        <div class="copy compact">
+          <span class="kicker">03 · Demultiplexing</span>
+          <h2 id="connections-title">One port.<br><em>Many conversations.</em></h2>
+          <p>Every accepted client gets its own socket. Port 80 stays the same; the full 5-tuple makes each connection unique.</p>
+          <button class="action" id="addClient">+ Accept client</button>
+          <button class="text-button" id="resetClients">Reset</button>
+        </div>
+        <div class="connection-viz">
+          <div class="listener"><span class="live-dot"></span><div><small>LISTENING SOCKET</small><b>nginx · TCP :80</b></div><code>fd 6</code></div>
+          <div class="connection-lines" id="connectionLines"></div>
+          <div class="client-list" id="clientList" aria-live="polite"></div>
+          <div class="tuple" id="tuple"><small>SELECTED SOCKET · 5-TUPLE</small><code>Accept a client to begin</code></div>
+        </div>
+      </section>
 
-    <section class="section cheat-sheet">
-      <div class="section-heading"><span>05 / Keep this</span><h2>The pocket reference</h2></div>
-      <div class="table-wrap"><table><thead><tr><th>Aspect</th><th>Port</th><th>Socket</th></tr></thead><tbody>
-        <tr><th>Nature</th><td>16-bit number</td><td>Kernel data structure + file descriptor</td></tr><tr><th>Lives in</th><td>Packet header / address</td><td>Kernel memory and process context</td></tr><tr><th>Identity</th><td>Meaningful with IP + protocol</td><td>Listening identity or connection 5-tuple</td></tr><tr><th>Created by</th><td>Chosen from protocol namespace</td><td><code>socket()</code> system call</td></tr><tr><th>Lifetime</th><td>Just a value</td><td>From creation until final kernel cleanup</td></tr>
-      </tbody></table></div>
-      <div class="formula"><small>A TCP CONNECTION IS IDENTIFIED BY</small><strong>( source IP, source port, destination IP, destination port, protocol )</strong><p>Not by “port 80” alone.</p></div>
-    </section>
+      <section class="chapter" id="remember" data-chapter="4" aria-labelledby="remember-title" hidden>
+        <div class="copy">
+          <span class="kicker">04 · The mental model</span>
+          <h2 id="remember-title">The number finds it.<br><em>The socket holds it.</em></h2>
+          <p>When you hear “port 80,” picture a lookup label shared by many distinct conversations—not a single pipe.</p>
+          <button class="action" data-next="intro">Replay <span>↻</span></button>
+        </div>
+        <div class="summary-viz">
+          <div class="summary-card port-summary"><small>PORT</small><b>80</b><p>16-bit lookup value</p><span>travels in a header</span></div>
+          <div class="summary-arrow">→</div>
+          <div class="summary-card socket-summary"><small>SOCKET</small><div class="mini-buffer"><i></i><i></i><i></i><i></i></div><p>Kernel endpoint</p><span>owns state + buffers</span></div>
+          <div class="formula"><small>CONNECTION IDENTITY</small><code>source IP · source port · destination IP · destination port · protocol</code></div>
+        </div>
+      </section>
+    </div>
   </main>
-  <footer><div class="brand-mark">P≠S</div><p>Built to make Linux networking click.</p><a href="#top">Back to top ↑</a></footer>
+  <footer><span>Built to make Linux networking click.</span><span>Use <kbd>←</kbd> <kbd>→</kbd> to explore</span></footer>
   <script src="script.js"></script>
 </body>
 </html>
