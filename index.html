@@ -3,21 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ports ≠ Sockets — one port, many sockets</title>
-  <meta name="description" content="A port is the address a server listens on — there's one. A socket is a connection — there are many, and it's the file descriptor your code reads and writes. Operate an nginx server and see why the difference matters: EADDRINUSE, the C10K fd limit, ephemeral ports, SO_REUSEPORT." />
+  <title>Ports ≠ Sockets — one connection, three names</title>
+  <meta name="description" content="The same TCP connection is named three ways: the remote host and the kernel's demux use the port, the process uses a file descriptor, and the kernel owns the socket itself. See one nginx connection through all three lenses — tcpdump, ss, lsof — and why it matters when you debug." />
   <meta name="theme-color" content="#0e0f13" />
 
   <!-- social / Open Graph previews. Update the absolute URLs if you deploy
        somewhere other than the default site. -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Ports ≠ Sockets" />
-  <meta property="og:title" content="Ports ≠ Sockets — one port, many sockets" />
-  <meta property="og:description" content="Operate a real nginx server across three acts and watch one port fan out into many sockets — then break it, the way you do in production: address already in use, too many open files, cannot assign requested address." />
+  <meta property="og:title" content="Ports ≠ Sockets — one connection, three names" />
+  <meta property="og:description" content="On the wire it's a port, in the kernel it's a socket, in the process it's a file descriptor — one nginx connection, three references, shown side by side through tcpdump, ss and lsof." />
   <meta property="og:image" content="social-card.svg" />
   <meta property="og:image:alt" content="A port is a number. A socket is the endpoint." />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Ports ≠ Sockets — one port, many sockets" />
-  <meta name="twitter:description" content="Why the port/socket difference matters for engineers: EADDRINUSE, the C10K fd limit, ephemeral ports, SO_REUSEPORT — shown on a live nginx socket table." />
+  <meta name="twitter:title" content="Ports ≠ Sockets — one connection, three names" />
+  <meta name="twitter:description" content="Port on the wire, socket in the kernel, file descriptor in the process — the three references to one connection, and why debugging means mapping between them." />
   <meta name="twitter:image" content="social-card.svg" />
 
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -37,45 +37,58 @@
     </div>
   </header>
 
-  <main id="stage" tabindex="0" aria-label="Operate an nginx server to see the difference between a port and a socket. A port is the one address a server listens on; a socket is a connection — there are many, one per client, each its own file descriptor. Move between the three acts with Prev act and Next act (or the arrow keys); use the action buttons to drive the server and watch the socket table; open a card to see the real ss and error output.">
-    <p id="act-kicker" class="eyebrow"></p>
-    <div id="scenario" aria-live="polite"></div>
+  <main id="stage" tabindex="0" aria-label="One nginx TCP connection seen through three lenses at once. On the wire the remote host names it by port; in the kernel it is a socket object; in the process it is a file descriptor. Accept or close a connection and it appears in all three; click any row to link it across the lenses; use getsockname to watch the process ask the kernel for its own port.">
+    <div id="req-label" aria-live="polite"></div>
+    <div id="scenario">The same connection — but the wire, the kernel and the process each call it something different.</div>
 
-    <!-- the three acts -->
-    <div id="acts-rail-wrap">
-      <svg id="acts-rail" viewBox="0 0 300 40" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Three acts: Accept, Outbound, Scale">
-        <line class="rail-arm" x1="24" y1="15" x2="276" y2="15" />
-        <g id="act-dots">
-          <circle class="rdot" data-act="0" cx="24"  cy="15" r="5" />
-          <circle class="rdot" data-act="1" cx="150" cy="15" r="5" />
-          <circle class="rdot" data-act="2" cx="276" cy="15" r="5" />
-        </g>
-        <text class="act-tick" x="24"  y="34" text-anchor="start">I · Accept</text>
-        <text class="act-tick" x="150" y="34" text-anchor="middle">II · Outbound</text>
-        <text class="act-tick" x="276" y="34" text-anchor="end">III · Scale</text>
-      </svg>
+    <!-- the selected connection's three names -->
+    <div id="names" aria-label="The selected connection's three names"></div>
+
+    <!-- one connection, three lenses; the socket sits in the middle -->
+    <div id="triptych">
+      <section class="lens" id="lens-wire" style="--lc: var(--c-port)" aria-label="Wire lens">
+        <div class="lens-head">
+          <span class="lens-icon" aria-hidden="true">📡</span>
+          <span class="lens-title">Wire</span>
+          <span class="lens-sub">what the remote host sees</span>
+          <span class="lens-tool">tcpdump</span>
+        </div>
+        <p class="lens-hint">names this connection by its <b>port</b></p>
+        <div class="lens-body" id="wire-body" role="list"></div>
+      </section>
+
+      <div class="lens-link" id="link-top"><span class="link-glyph" aria-hidden="true">▼</span><span class="link-label"></span></div>
+
+      <section class="lens" id="lens-kernel" style="--lc: var(--c-socket)" aria-label="Kernel lens">
+        <div class="lens-head">
+          <span class="lens-icon" aria-hidden="true">🧠</span>
+          <span class="lens-title">Kernel</span>
+          <span class="lens-sub">the socket object</span>
+          <span class="lens-tool">ss</span>
+        </div>
+        <p class="lens-hint"><b>is</b> the socket — buffers, TCP state, the 5-tuple it matches on</p>
+        <div class="lens-body" id="kernel-body" role="list"></div>
+      </section>
+
+      <div class="lens-link" id="link-bot"><span class="link-glyph" aria-hidden="true">▲</span><span class="link-label"></span></div>
+
+      <section class="lens" id="lens-proc" style="--lc: var(--c-tuple)" aria-label="Process lens">
+        <div class="lens-head">
+          <span class="lens-icon" aria-hidden="true">⚙️</span>
+          <span class="lens-title">Process</span>
+          <span class="lens-sub">user space · nginx</span>
+          <span class="lens-tool">lsof</span>
+        </div>
+        <p class="lens-hint">refers to it by <b>file descriptor</b> — it never names the port again</p>
+        <div class="lens-body" id="proc-body" role="list"></div>
+        <div class="lens-foot">
+          <button id="gsn-btn" class="ghost">nginx asks: <span class="mono-inline">getsockname(fd)</span></button>
+          <div id="gsn" hidden></div>
+        </div>
+      </section>
     </div>
 
-    <!-- live server status -->
-    <div id="req-label" aria-live="polite"></div>
-
-    <!-- the live kernel socket table -->
-    <section id="panel" aria-label="Kernel socket table">
-      <div class="panel-head">
-        <span class="panel-title"><span class="fig">Fig.&nbsp;<span id="fig-num">1</span></span> kernel socket table <span class="panel-sub" id="ss-cmd">ss -tnp</span></span>
-        <div id="counters" aria-label="Live counts"></div>
-      </div>
-      <div id="table-wrap">
-        <div id="table-head" class="srow srow-head" aria-hidden="true">
-          <span>State</span><span>Local&nbsp;Address:Port</span><span>Peer&nbsp;Address:Port</span><span>Process</span>
-        </div>
-        <div id="table-body"></div>
-      </div>
-      <p id="table-stat" aria-live="polite"></p>
-    </section>
-
-    <!-- drive the server -->
-    <div id="actions" aria-label="Server actions"></div>
+    <p id="status" aria-live="polite"></p>
 
     <!-- why it matters -->
     <div id="stack"></div>
@@ -83,9 +96,9 @@
 
   <footer id="controlbar">
     <div id="controls">
-      <button class="step-btn" id="prev">◀&nbsp;Prev act</button>
-      <button class="step-btn accent" id="reset">↺&nbsp;Reset</button>
-      <button class="step-btn" id="next">Next act&nbsp;▶</button>
+      <button class="step-btn accent" id="accept">＋&nbsp;Accept a client</button>
+      <button class="step-btn" id="close">Close a connection</button>
+      <button class="step-btn" id="reset">↺&nbsp;Reset</button>
     </div>
   </footer>
 
@@ -94,10 +107,10 @@
     <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="help-title" tabindex="-1">
       <button class="close" id="help-close" aria-label="Close">✕</button>
       <p class="sheet-kicker">A field guide</p>
-      <h2 id="help-title">A port is a number. A socket is the endpoint.</h2>
-      <p>A <b>port</b> is the address a server <em>listens on</em> — there's exactly one. A <b>socket</b> is a <em>connection</em> — there are many, one per client, and it's the file descriptor your code actually <code>read()</code>s and <code>write()</code>s.</p>
-      <p>Operate a real <b>nginx</b> server across three short acts. <b>Accept</b> clients and watch one port fan out into many sockets — then push it until it breaks. The errors you hit in production are exactly what tell the two apart.</p>
-      <p class="muted">Use the <b>action buttons</b> to drive the server, the <b>acts</b> to move between scenes, and open any <b>card</b> to see the real <code>ss</code>, <code>lsof</code> and error output — the stuff behind <code>address already in use</code>, <code>too many open files</code>, and <code>cannot assign requested address</code>.</p>
+      <h2 id="help-title">One connection, three names.</h2>
+      <p>The same TCP connection gets named three ways, because three different actors each need to reach it. The <b>remote host</b> and the kernel's packet demux use the <b>port</b>. The <b>process</b> uses a <b>file descriptor</b> — <code>read(4)</code>, never <code>read(:80)</code>. The <b>kernel</b> owns the <b>socket</b> itself: the buffers, the TCP state, the object both sides point at.</p>
+      <p>Watch one nginx connection through all three lenses at once. <b>Accept</b> a client and it appears everywhere — a flow on the wire, a socket in the kernel, an fd in the process. Ask <b>getsockname()</b> and watch the process <em>syscall into the kernel</em> just to learn its own port.</p>
+      <p class="muted"><code>socket:[12346]</code> is the join key — it shows up in both <code>lsof</code> (the process's fd) and the kernel's socket table. The port routes packets <b>in</b>, the fd reads them <b>out</b>, and the socket in the middle is the thing that's actually real.</p>
       <button class="primary" id="help-start">Start</button>
     </div>
   </div>

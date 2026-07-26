@@ -1,35 +1,35 @@
 # Ports ≠ Sockets
 
-An interactive, dependency-free explainer for the distinction between ports
-and sockets in Linux — built around a real, recognizable example (an nginx
-web server) and, above all, around *why the difference matters* to engineers.
+An interactive, dependency-free explainer for the three references to a single
+network connection — the distinction that matters when you're debugging.
 
-A **port** is the address a server *listens on* — there's exactly one. A
-**socket** is a *connection* — there are many, one per client, and it's the
-file descriptor your code actually `read()`s and `write()`s. You operate a
-live nginx server and watch the kernel socket table: the port stays one while
-the sockets multiply. Then you break it the way production does.
+The same TCP connection gets named three ways, because three different actors
+each need to reach it:
 
-## Three acts
+- the **remote host** (and the kernel's packet demux) name it by its **port** —
+  it's what's on the wire;
+- the **process** names it by a **file descriptor** — `read(4)`, never
+  `read(:80)`; after `accept()` returns, the port is gone from user space;
+- the **kernel** owns the **socket** itself — the buffers, the TCP state, the
+  object both sides point at.
 
-- **Act I — Bind & Accept.** Accept clients and watch one `LISTEN` socket fan
-  out into many `ESTAB` sockets — same `:80`, one fd each. Start a second
-  nginx and hit `bind(): Address already in use`; keep accepting and hit
-  `accept(): Too many open files` at `ulimit -n`. *One port, many sockets;
-  EADDRINUSE is a bind conflict, not a connection limit; capacity is bounded
-  by file descriptors (C10K), not ports.*
-- **Act II — Outbound.** Now nginx is the client, dialing an upstream. Each
-  outbound connection borrows a local **ephemeral source port**; churn them
-  and hit `connect(): Cannot assign requested address`, with `TIME-WAIT`
-  holding ports for ~60s. *Inbound, one port holds unlimited sockets;
-  outbound, each socket spends a source port — the limit flips to your side.*
-- **Act III — Scale.** Add workers with `SO_REUSEPORT`: many listening
-  sockets on the *same* `:80`, the kernel spreading accepts across them.
-  *The port is one address; you scale with sockets, workers and machines —
-  never more ports.*
+The site shows one nginx connection through all three lenses at once —
+`tcpdump` (Wire), `ss` (Kernel), `lsof` (Process) — with the socket in the
+middle: the port routes packets *into* it, the fd reads *out* of it, and
+`socket:[inode]` is the literal join key visible in both the kernel and the
+process.
 
-Every claim is backed by the real output you'd see in `ss`, `lsof`, `/proc`
-and the actual kernel error messages.
+## What you can do
+
+- **Accept** a client and watch the connection appear in all three lenses at
+  once — a flow on the wire, a socket in the kernel, an fd in the process.
+- **Click** any row to light the same connection across all three lenses and
+  the connecting thread.
+- **`getsockname()`** — ask the process what port it's on, and watch it have to
+  syscall *into the kernel* to find out, because the port isn't in user space.
+
+Every claim is backed by the real output you'd see in `tcpdump`, `ss`, `lsof`
+and `/proc`.
 
 ## Run locally
 

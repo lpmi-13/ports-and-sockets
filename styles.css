@@ -299,19 +299,45 @@ code { font-family: var(--mono); background: var(--bg-2); padding: 1px 5px; bord
   .overlay { align-items: center; padding: 24px; }
   .sheet-card { border-radius: 16px; }
 }
-/* ---------- act kicker, act rail, counters, actions (new layout, same system) ---------- */
-#act-kicker { align-self: center; margin: 0; color: var(--accent); }
+/* ---------- three lenses: wire / kernel / process (one connection, three names) ---------- */
+#names, #triptych, #status { max-width: 680px; width: 100%; margin-inline: auto; }
+#names { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 
-#acts-rail-wrap { display: flex; justify-content: center; }
-#acts-rail { width: 100%; max-width: 460px; height: auto; overflow: visible; }
-.act-tick { fill: var(--muted-2); font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+#triptych { display: flex; flex-direction: column; }
+.lens { border: 1px solid var(--line); border-left: 3px solid var(--lc); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.lens-head { display: flex; align-items: center; gap: 8px; padding: 9px 13px; border-bottom: 1px solid var(--line); background: var(--bg-2); flex-wrap: wrap; }
+.lens-icon { font-size: 15px; line-height: 1; filter: saturate(.85); }
+.lens-title { font-family: var(--serif); font-weight: 500; font-size: 15px; color: var(--lc); }
+.lens-sub { font-size: 11.5px; color: var(--muted); }
+.lens-tool { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--lc); border: 1px solid color-mix(in srgb, var(--lc) 42%, transparent); border-radius: 5px; padding: 1px 7px; }
+.lens-hint { margin: 0; padding: 7px 13px; font-size: 11.5px; color: var(--muted); border-bottom: 1px dotted var(--line-2); }
+.lens-hint b { color: var(--lc); font-weight: 600; }
+.lens-body { overflow-x: auto; }
+.lens-row { display: block; padding: 9px 13px; font-family: var(--mono); font-size: 12px; border-top: 1px dotted var(--line-2); color: var(--muted); cursor: pointer; transition: background .18s; white-space: nowrap; }
+.lens-body .lens-row:first-child { border-top: 0; }
+.lens-row:hover { background: color-mix(in srgb, var(--lc) 8%, transparent); }
+.lens-row.sel { background: color-mix(in srgb, var(--lc) 15%, transparent); box-shadow: inset 3px 0 0 var(--lc); }
+.lens-row.fresh { animation: rowin .42s cubic-bezier(.22,.61,.36,1); }
+.tok-muted { color: var(--muted-2); }
+.tok-port  { color: var(--c-port);   font-weight: 600; }
+.tok-sock  { color: var(--c-socket); font-weight: 600; }
+.tok-fd    { color: var(--c-tuple);  font-weight: 600; }
+.tok-state { color: var(--c-socket); font-weight: 600; }
 
-#counters { display: flex; flex-wrap: wrap; gap: 5px; }
+.lens-link { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 8px; text-align: center; }
+.link-glyph { color: var(--line-2); font-size: 11px; transition: color .2s; }
+.lens-link.hot .link-glyph { color: var(--accent); }
+.link-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: .02em; color: var(--muted-2); line-height: 1.45; max-width: 94%; }
+.link-label b { color: var(--muted); font-weight: 600; }
 
-#actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.act-btn { height: 34px; font-size: 13px; }
-.ghost.danger { border-color: color-mix(in srgb, var(--c-reject) 45%, var(--line-2)); }
-.ghost.danger:hover { border-color: var(--c-reject); background: color-mix(in srgb, var(--c-reject) 12%, transparent); }
+.lens-foot { padding: 10px 13px; border-top: 1px dotted var(--line-2); }
+.mono-inline { font-family: var(--mono); font-size: .92em; color: var(--accent); }
+#gsn { margin-top: 10px; }
+
+#status { margin: 0; padding: 2px 6px; font-family: var(--serif); font-weight: 300; font-size: 14px; color: var(--muted); text-align: center; line-height: 1.5; }
+#status b { color: var(--text); font-family: var(--mono); font-size: 12.5px; font-weight: 500; }
+#status.reject, #status.reject b { color: var(--c-reject); }
+
 .ghost:disabled { opacity: .4; cursor: default; }
 .ghost:disabled:hover { border-color: var(--line-2); background: var(--surface); }
 
