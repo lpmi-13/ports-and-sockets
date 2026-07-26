@@ -2,32 +2,38 @@
   <title id="title">Ports are not sockets</title>
   <desc id="desc">A port gets a packet to a bucket of sockets; the full 5-tuple picks which socket receives it.</desc>
   <defs>
-    <radialGradient id="bg" cx="62%" cy="26%" r="80%">
-      <stop offset="0%" stop-color="#12203f"/>
-      <stop offset="60%" stop-color="#0a0f1e"/>
+    <radialGradient id="bg" cx="50%" cy="-8%" r="90%">
+      <stop offset="0%" stop-color="#17151d"/>
+      <stop offset="55%" stop-color="#0e0f13"/>
     </radialGradient>
+    <style>
+      .serif { font-family: "IBM Plex Serif", Georgia, serif; }
+      .mono  { font-family: "IBM Plex Mono", monospace; }
+    </style>
   </defs>
   <rect width="1200" height="630" fill="url(#bg)"/>
 
-  <rect x="72" y="64" width="132" height="52" rx="10" fill="#0f1730" stroke="#26325a" stroke-width="2"/>
-  <text x="90" y="99" fill="#e69f00" font-family="monospace" font-size="30" font-weight="800">:⇄</text>
-  <text x="128" y="99" fill="#eaf0ff" font-family="Arial, sans-serif" font-size="24" font-weight="700">Ports ≠ Sockets</text>
+  <!-- brand: violet arrival dot + serif wordmark -->
+  <circle cx="86" cy="86" r="9" fill="#a879ff"/>
+  <circle cx="86" cy="86" r="9" fill="none" stroke="#a879ff" stroke-opacity="0.35" stroke-width="7"/>
+  <text x="108" y="95" class="serif" fill="#ece9e3" font-size="30">Ports <tspan fill="#a879ff" font-style="italic">≠</tspan> Sockets</text>
 
-  <text x="72" y="246" fill="#eaf0ff" font-family="Arial, sans-serif" font-size="82" font-weight="800" letter-spacing="-3">A port is a number.</text>
-  <text x="72" y="344" fill="#2fb87f" font-family="Arial, sans-serif" font-size="82" font-weight="800" letter-spacing="-3">A socket is the endpoint.</text>
+  <text x="72" y="248" class="serif" fill="#ece9e3" font-size="86" font-weight="400">A port is a number.</text>
+  <text x="72" y="346" class="serif" fill="#63c58c" font-size="86" font-weight="400">A socket is the endpoint.</text>
 
   <!-- a miniature socket table: three rows sharing :80, the matched one bright -->
-  <g font-family="monospace" font-size="26">
-    <rect x="72" y="410" width="1056" height="150" rx="14" fill="#131d38" stroke="#26325a" stroke-width="2"/>
-    <rect x="88" y="426" width="1024" height="40" rx="6" fill="#0f1730"/>
-    <rect x="88" y="470" width="1024" height="40" rx="6" fill="#12331f"/>
-    <rect x="88" y="514" width="1024" height="40" rx="6" fill="#0f1730"/>
-    <rect x="88" y="470" width="6" height="40" fill="#2fb87f"/>
-    <text x="112" y="454" fill="#cd79b0" font-weight="700">LISTEN</text>
-    <text x="240" y="454" fill="#eaf0ff">0.0.0.0:<tspan fill="#e69f00">80</tspan>  →  nginx  fd=6</text>
-    <text x="112" y="498" fill="#2fb87f" font-weight="700">ESTAB</text>
-    <text x="240" y="498" fill="#eaf0ff">10.0.0.1:<tspan fill="#e69f00">80</tspan>  10.0.0.55:54321  fd=12</text>
-    <text x="112" y="542" fill="#2fb87f" font-weight="700">ESTAB</text>
-    <text x="240" y="542" fill="#eaf0ff">10.0.0.1:<tspan fill="#e69f00">80</tspan>  10.0.0.66:12345  fd=15</text>
+  <g class="mono" font-size="25">
+    <rect x="72" y="410" width="1056" height="152" rx="14" fill="#191a20" stroke="#2c2d35" stroke-width="2"/>
+    <rect x="88" y="426" width="1024" height="40" rx="6" fill="#14151a"/>
+    <rect x="88" y="470" width="1024" height="40" rx="6" fill="#15281d"/>
+    <rect x="88" y="514" width="1024" height="40" rx="6" fill="#14151a"/>
+    <rect x="88" y="470" width="5" height="40" fill="#63c58c"/>
+    <circle cx="1075" cy="490" r="13" fill="#a879ff"/>
+    <text x="112" y="454" fill="#c489c9">LISTEN</text>
+    <text x="240" y="454" fill="#ece9e3">0.0.0.0:<tspan fill="#dca24f">80</tspan>   nginx  fd=6</text>
+    <text x="112" y="498" fill="#63c58c">ESTAB</text>
+    <text x="240" y="498" fill="#ece9e3">10.0.0.1:<tspan fill="#dca24f">80</tspan>  10.0.0.55:54321  fd=12</text>
+    <text x="112" y="542" fill="#63c58c">ESTAB</text>
+    <text x="240" y="542" fill="#ece9e3">10.0.0.1:<tspan fill="#dca24f">80</tspan>  10.0.0.66:12345  fd=15</text>
   </g>
 </svg>

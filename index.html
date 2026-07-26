@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ports ≠ Sockets — where does a packet go?</title>
   <meta name="description" content="A port is a number the kernel looks up. A socket is the endpoint that actually holds your data. Step a packet through Linux demultiplexing and watch which socket receives it." />
-  <meta name="theme-color" content="#0a0f1e" />
+  <meta name="theme-color" content="#0e0f13" />
 
   <!-- social / Open Graph previews. Update the absolute URLs if you deploy
        somewhere other than the default site. -->
@@ -21,21 +21,27 @@
   <meta name="twitter:image" content="social-card.svg" />
 
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark" aria-hidden="true">:⇄</span> Ports&nbsp;≠&nbsp;Sockets</div>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-word">Ports <i>≠</i> Sockets</span>
+    </div>
     <div class="topbar-actions">
-      <button id="new-req" class="ghost pill" aria-label="Generate a new random packet">🎲<span class="pill-label">New packet</span></button>
-      <button id="help-btn" class="ghost" aria-haspopup="dialog" aria-label="About">?</button>
+      <button id="new-req" class="ghost" aria-label="Generate a new random packet"><span class="btn-glyph" aria-hidden="true">⇄</span><span class="pill-label">New packet</span></button>
+      <button id="help-btn" class="ghost quiet" aria-haspopup="dialog" aria-label="About">About</button>
     </div>
   </header>
 
   <main id="stage" tabindex="0" aria-label="Packet demultiplexing on a Linux host. A port is a number the kernel looks up; a socket is the endpoint that receives the data. Use Prev and Next (or the arrow keys) to step the packet up the stack and watch the kernel socket table narrow to the one socket that receives it. Tap a socket row or an anatomy row to inspect it.">
     <!-- the packet currently arriving -->
     <div id="req-label" aria-live="polite"></div>
-    <div id="scenario">☰&nbsp; one host, many sockets — which one receives this packet?</div>
+    <div id="scenario">One host, many sockets — which one receives this packet?</div>
 
     <!-- the packet's climb: wire → up the kernel stack → the receiving process -->
     <div id="journey">
@@ -60,7 +66,7 @@
     <!-- the live kernel socket table: rows narrow as the kernel matches -->
     <section id="panel" aria-label="Kernel socket table">
       <div class="panel-head">
-        <span class="panel-title">kernel socket table <span class="panel-sub">ss -tuanp</span></span>
+        <span class="panel-title"><span class="fig">Fig.&nbsp;1</span> kernel socket table <span class="panel-sub">ss -tuanp</span></span>
         <div id="tuple-chips" aria-label="This packet's connection identity"></div>
       </div>
       <div id="table-wrap">
@@ -89,10 +95,11 @@
   <div id="help" class="overlay" hidden>
     <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="help-title" tabindex="-1">
       <button class="close" id="help-close" aria-label="Close">✕</button>
+      <p class="sheet-kicker">A field guide</p>
       <h2 id="help-title">A port is a number. A socket is the endpoint.</h2>
       <p>A <b>port</b> is a 16-bit number sitting in a packet header — no buffer, no state, no owner. A <b>socket</b> is a real kernel object with receive and send buffers, protocol state, and a file descriptor. The socket is what actually <em>holds your data</em>.</p>
       <p>Step forward with <b>Next</b> (or the arrow keys) to walk one packet up the kernel stack. Watch the <b>socket table</b> narrow: the port gets the packet to a <em>bucket</em> of sockets that share it; the full <b>5-tuple</b> picks the one socket that receives.</p>
-      <p class="muted"><b>Tap any socket row</b> to select it, or an <b>anatomy row</b> below to see its real fields as <code>ss</code>, <code>tcpdump</code> and <code>/proc</code> would show them. Hit <b>🎲 New packet</b> for a fresh arrival — an established connection, a brand-new SYN, a UDP datagram, or a packet to a closed port.</p>
+      <p class="muted"><b>Tap any socket row</b> to select it, or an <b>anatomy row</b> below to see its real fields as <code>ss</code>, <code>tcpdump</code> and <code>/proc</code> would show them. Hit <b>New packet</b> for a fresh arrival — an established connection, a brand-new SYN, a UDP datagram, or a packet to a closed port.</p>
       <button class="primary" id="help-start">Start</button>
     </div>
   </div>

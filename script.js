@@ -445,7 +445,7 @@
 
     // phase
     phaseTag.textContent = tagWord();
-    phaseTag.style.background = "var(" + colorVar + ")";
+    phaseTag.style.color = "var(" + colorVar + ")";
     phaseNode.innerHTML = node.icon + " <b>" + esc(node.name) + '</b> <span class="ps">' + esc(node.sub) + "</span>";
 
     // rail
@@ -456,6 +456,7 @@
       dot.setAttribute("aria-current", cur ? "step" : "false");
       dot.setAttribute("r", cur ? "6.5" : "4.5");
       dot.style.fill = cur ? "var(" + colorVar + ")" : "";
+      dot.style.color = cur ? "var(" + colorVar + ")" : "";   // drives the halo
     });
 
     // tuple chips
