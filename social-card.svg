@@ -1,13 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">Ports are not sockets</title>
-  <desc id="desc">A visual guide to the distinction in the Linux networking stack</desc>
-  <rect width="1200" height="630" fill="#f5f3ed"/>
-  <rect x="72" y="64" width="82" height="48" fill="#172225"/>
-  <text x="86" y="96" fill="#d7ff57" font-family="monospace" font-size="24" font-weight="700">P≠S</text>
-  <text x="72" y="238" fill="#172225" font-family="Arial, sans-serif" font-size="88" font-weight="700" letter-spacing="-4">A port is a number.</text>
-  <text x="72" y="342" fill="#5f80ff" font-family="Arial, sans-serif" font-size="88" font-weight="700" letter-spacing="-4">A socket is the endpoint.</text>
-  <line x1="72" y1="420" x2="1128" y2="420" stroke="#ccd0c9" stroke-width="2"/>
-  <text x="72" y="500" fill="#687275" font-family="monospace" font-size="27">LINUX NETWORKING, VISUALLY</text>
-  <circle cx="1075" cy="500" r="32" fill="#d7ff57"/>
-  <circle cx="1075" cy="500" r="12" fill="#172225"/>
+  <desc id="desc">A port gets a packet to a bucket of sockets; the full 5-tuple picks which socket receives it.</desc>
+  <defs>
+    <radialGradient id="bg" cx="62%" cy="26%" r="80%">
+      <stop offset="0%" stop-color="#12203f"/>
+      <stop offset="60%" stop-color="#0a0f1e"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <rect x="72" y="64" width="132" height="52" rx="10" fill="#0f1730" stroke="#26325a" stroke-width="2"/>
+  <text x="90" y="99" fill="#e69f00" font-family="monospace" font-size="30" font-weight="800">:⇄</text>
+  <text x="128" y="99" fill="#eaf0ff" font-family="Arial, sans-serif" font-size="24" font-weight="700">Ports ≠ Sockets</text>
+
+  <text x="72" y="246" fill="#eaf0ff" font-family="Arial, sans-serif" font-size="82" font-weight="800" letter-spacing="-3">A port is a number.</text>
+  <text x="72" y="344" fill="#2fb87f" font-family="Arial, sans-serif" font-size="82" font-weight="800" letter-spacing="-3">A socket is the endpoint.</text>
+
+  <!-- a miniature socket table: three rows sharing :80, the matched one bright -->
+  <g font-family="monospace" font-size="26">
+    <rect x="72" y="410" width="1056" height="150" rx="14" fill="#131d38" stroke="#26325a" stroke-width="2"/>
+    <rect x="88" y="426" width="1024" height="40" rx="6" fill="#0f1730"/>
+    <rect x="88" y="470" width="1024" height="40" rx="6" fill="#12331f"/>
+    <rect x="88" y="514" width="1024" height="40" rx="6" fill="#0f1730"/>
+    <rect x="88" y="470" width="6" height="40" fill="#2fb87f"/>
+    <text x="112" y="454" fill="#cd79b0" font-weight="700">LISTEN</text>
+    <text x="240" y="454" fill="#eaf0ff">0.0.0.0:<tspan fill="#e69f00">80</tspan>  →  nginx  fd=6</text>
+    <text x="112" y="498" fill="#2fb87f" font-weight="700">ESTAB</text>
+    <text x="240" y="498" fill="#eaf0ff">10.0.0.1:<tspan fill="#e69f00">80</tspan>  10.0.0.55:54321  fd=12</text>
+    <text x="112" y="542" fill="#2fb87f" font-weight="700">ESTAB</text>
+    <text x="240" y="542" fill="#eaf0ff">10.0.0.1:<tspan fill="#e69f00">80</tspan>  10.0.0.66:12345  fd=15</text>
+  </g>
 </svg>

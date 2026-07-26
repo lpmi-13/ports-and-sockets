@@ -1,5 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#172225"/>
-  <path d="M13 16h17c9 0 15 5 15 13S39 42 30 42h-7v8H13V16Zm10 9v8h6c4 0 6-1 6-4s-2-4-6-4h-6Z" fill="#d7ff57"/>
-  <path d="M40 44h13v4H40zm0-8h13v4H40z" fill="#ff7657"/>
+  <rect width="64" height="64" rx="12" fill="#0a0f1e"/>
+  <!-- a socket table: three rows sharing a port; the matched one is bright -->
+  <rect x="12" y="14" width="40" height="9" rx="2" fill="#26325a"/>
+  <rect x="12" y="27" width="40" height="9" rx="2" fill="#2fb87f"/>
+  <rect x="12" y="40" width="40" height="9" rx="2" fill="#26325a"/>
+  <!-- the shared port number, orange, at the left edge of every row -->
+  <rect x="12" y="14" width="7" height="35" rx="2" fill="#e69f00"/>
+  <rect x="12" y="27" width="7" height="9" fill="#e69f00"/>
 </svg>
