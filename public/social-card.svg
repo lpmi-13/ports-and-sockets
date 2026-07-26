@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">Ports ≠ Sockets — one connection, three names</title>
-  <desc id="desc">On the wire it's a port, in the kernel it's a socket, in the process it's a file descriptor — the three references to one connection.</desc>
+  <desc id="desc">On the wire it is a port, in the kernel it is a socket, and in the process it is a file descriptor — three references to one connection.</desc>
   <defs>
     <radialGradient id="bg" cx="50%" cy="-8%" r="95%">
       <stop offset="0%" stop-color="#17151d"/>

@@ -1,6 +1,6 @@
 # Ports ≠ Sockets
 
-An interactive, dependency-free explainer for the three references to a single
+An interactive TypeScript explainer for the three references to a single
 network connection — the distinction that matters when you're debugging.
 
 The same TCP connection gets named three ways, because three different actors
@@ -34,13 +34,23 @@ and `/proc`.
 ## Run locally
 
 ```sh
-python3 -m http.server 8000
+npm install
+npm run dev
 ```
 
-Then open <http://localhost:8000>.
+Then open <http://localhost:5173>.
+
+## Production build
+
+```sh
+npm run build
+npm run preview
+```
+
+Vite writes the production site to `dist/` and minifies the compiled
+JavaScript and CSS.
 
 ## Deploy
 
-The repository includes a `netlify.toml`, so Netlify can deploy it without a
-build command. Set the repository as the site source and Netlify will publish
-the project root.
+The repository includes a `netlify.toml` that builds the TypeScript app and
+publishes `dist/`.
