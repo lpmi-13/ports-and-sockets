@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="12" fill="#0e0f13"/>
-  <!-- One connection, three names: wire/port (amber), socket (sage, middle),
+  <!-- Brand mark: wire/port (amber), socket (sage, middle),
        process/fd (slate blue) — with the violet connection resting on the socket -->
   <rect x="12" y="13" width="40" height="9"  rx="2.5" fill="#dca24f"/>
   <rect x="12" y="27" width="40" height="10" rx="2.5" fill="#63c58c"/>

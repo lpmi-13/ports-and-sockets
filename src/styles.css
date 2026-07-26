@@ -355,6 +355,105 @@ code { font-family: var(--mono); background: var(--bg-2); padding: 1px 5px; bord
 .ghost:disabled { opacity: .4; cursor: default; }
 .ghost:disabled:hover { border-color: var(--line-2); background: var(--surface); }
 
+/* ---------- desktop reading scale ---------- */
+@media (min-width: 900px) {
+  .topbar { padding: 16px 26px; }
+  .brand { gap: 13px; }
+  .brand-mark { width: 15px; height: 15px; }
+  .brand-word { font-size: 22px; }
+  .ghost { height: 42px; padding-inline: 17px; font-size: 15.5px; }
+
+  #stage, .sheet-card, #panel, #stack {
+    max-width: 840px;
+  }
+  #stage {
+    gap: 20px;
+    padding: 20px 24px 32px;
+  }
+  #req-label {
+    gap: 11px;
+    padding-block: 8px;
+    font-size: 16px;
+  }
+  #scenario {
+    max-width: 40ch;
+    font-size: 20px;
+  }
+
+  #names, #triptych, #status {
+    max-width: 840px;
+  }
+  #names { gap: 8px; }
+  .tchip {
+    padding: 4px 9px;
+    font-size: 13px;
+  }
+  .lens-head {
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .lens-icon { font-size: 19px; }
+  .lens-title { font-size: 19px; }
+  .lens-sub { font-size: 14px; }
+  .lens-tool {
+    padding: 2px 9px;
+    font-size: 12.5px;
+  }
+  .lens-hint {
+    padding: 9px 16px;
+    font-size: 14.5px;
+  }
+  .lens-row {
+    padding: 12px 16px;
+    font-size: 15px;
+  }
+  .lens-link { gap: 2px; padding: 7px 10px; }
+  .link-glyph { font-size: 14px; }
+  .link-label { font-size: 11.5px; }
+  .lens-foot { padding: 13px 16px; }
+  #status {
+    padding-inline: 10px;
+    font-size: 17px;
+  }
+  #status b { font-size: 15px; }
+
+  .lrow-head {
+    gap: 14px;
+    padding: 16px;
+  }
+  .lrow-sw { width: 11px; height: 11px; }
+  .lrow-name { font-size: 19px; }
+  .lrow-name .lkind {
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+  .lrow-cap {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .lrow-chev { font-size: 14px; }
+  .lrow-detail-in { padding-inline: 16px; }
+  .lrow.open .lrow-detail-in { padding-bottom: 16px; }
+  .ld-field, .term-cmd, .term-out { font-size: 14px; }
+
+  #controlbar { padding-block: 14px; }
+  #controls {
+    max-width: 840px;
+    gap: 12px;
+  }
+  .step-btn {
+    max-width: 220px;
+    padding: 14px;
+    font-size: 15.5px;
+  }
+
+  .sheet-card { padding: 30px; }
+  .sheet-kicker { font-size: 12px; }
+  .sheet-card h2 { font-size: 30px; }
+  .sheet-card p { font-size: 16.5px; }
+  .primary { font-size: 17px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 1ms !important; animation-duration: 1ms !important; }
   body::before { display: none; }

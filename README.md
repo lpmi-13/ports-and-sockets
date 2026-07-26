@@ -48,7 +48,9 @@ npm run preview
 ```
 
 Vite writes the production site to `dist/` and minifies the compiled
-JavaScript and CSS.
+JavaScript and CSS. JavaScript, CSS, and the favicon use content-hashed
+filenames, while the HTML is revalidated so browsers discover the latest
+asset URLs after each deploy.
 
 ## Deploy
 

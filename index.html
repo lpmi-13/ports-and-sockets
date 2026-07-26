@@ -6,21 +6,22 @@
   <title>Ports ≠ Sockets — one connection, three names</title>
   <meta name="description" content="The same TCP connection is named three ways: the remote host and the kernel's demux use the port, the process uses a file descriptor, and the kernel owns the socket itself. See one nginx connection through all three lenses — tcpdump, ss, lsof — and why it matters when you debug." />
   <meta name="theme-color" content="#0e0f13" />
+  <link rel="canonical" href="https://ports-and-sockets.netlify.app/" />
 
-  <!-- social / Open Graph previews. Update the absolute URLs if you deploy
-       somewhere other than the default site. -->
+  <!-- social / Open Graph previews -->
   <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://ports-and-sockets.netlify.app/" />
   <meta property="og:site_name" content="Ports ≠ Sockets" />
   <meta property="og:title" content="Ports ≠ Sockets — one connection, three names" />
   <meta property="og:description" content="On the wire it's a port, in the kernel it's a socket, in the process it's a file descriptor — one nginx connection, three references, shown side by side through tcpdump, ss and lsof." />
-  <meta property="og:image" content="/social-card.svg" />
+  <meta property="og:image" content="https://ports-and-sockets.netlify.app/social-card.svg" />
   <meta property="og:image:alt" content="One connection, three names — a port on the wire, a socket in the kernel, a file descriptor in the process." />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Ports ≠ Sockets — one connection, three names" />
   <meta name="twitter:description" content="Port on the wire, socket in the kernel, file descriptor in the process — the three references to one connection, and why debugging means mapping between them." />
-  <meta name="twitter:image" content="/social-card.svg" />
+  <meta name="twitter:image" content="https://ports-and-sockets.netlify.app/social-card.svg" />
 
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/src/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" />
