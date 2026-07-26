@@ -13,23 +13,22 @@ each need to reach it:
 - the **kernel** owns the **socket** itself — the buffers, the TCP state, the
   object both sides point at.
 
-The site shows one nginx connection through all three lenses at once —
-`tcpdump` (Wire), `ss` (Kernel), `lsof` (Process) — with the socket in the
-middle: the port routes packets *into* it, the fd reads *out* of it, and
-`socket:[inode]` is the literal join key visible in both the kernel and the
-process.
+The site makes each accepted nginx connection the primary visual object.
+Connections appear as lanes from a public remote endpoint to
+`192.168.1.10:80`. Opening one lane reveals a single horizontal journey
+through its remote port, kernel socket and 5-tuple, and nginx file descriptor.
+Connections start collapsed and only open when clicked. One connection can be
+expanded at a time, and the demo does not impose a connection-count cap. The
+live connection total remains visible in the fixed header while the list
+scrolls.
 
 ## What you can do
 
-- **Accept** a client and watch the connection appear in all three lenses at
-  once — a flow on the wire, a socket in the kernel, an fd in the process.
-- **Click** any row to light the same connection across all three lenses and
-  the connecting thread.
-- **`getsockname()`** — ask the process what port it's on, and watch it have to
-  syscall *into the kernel* to find out, because the port isn't in user space.
-
-Every claim is backed by the real output you'd see in `tcpdump`, `ss`, `lsof`
-and `/proc`.
+- **Accept** a client and watch a new remote-host-to-nginx connection lane
+  appear.
+- **Open** a connection to reveal its Port → Socket → FD reference journey.
+- **Scroll horizontally** through the expanded journey on narrow screens.
+- **Close selected** and watch that complete connection disappear.
 
 ## Run locally
 
