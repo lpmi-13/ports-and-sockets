@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <!-- Full-bleed square: iOS applies its own rounded mask, so no corner radius here -->
+  <rect width="180" height="180" fill="#0e0f13"/>
+  <!-- Brand mark: the "≠" from "Ports ≠ Sockets", in accent purple -->
+  <g stroke="#a879ff" stroke-width="20" stroke-linecap="round">
+    <line x1="51" y1="73" x2="129" y2="73"/>
+    <line x1="51" y1="107" x2="129" y2="107"/>
+    <line x1="59" y1="138" x2="121" y2="42" stroke="#0e0f13" stroke-width="35"/>
+    <line x1="59" y1="138" x2="121" y2="42"/>
+  </g>
+</svg>

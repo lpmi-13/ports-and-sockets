@@ -809,7 +809,9 @@ function connectionCard(connection: Connection): HTMLElement {
   const expanded = connection.id === state.expanded;
   const selected = connection.id === state.selected;
   const clientInspected = state.perspective === "client";
-  const article = document.createElement("article");
+  // A div carries the listitem role cleanly; article does not allow it, so the
+  // list (#connection-list role="list") stays valid for assistive tech.
+  const article = document.createElement("div");
   article.className =
     "connection-card" +
     (selected ? " selected" : "") +
@@ -1087,7 +1089,7 @@ function renderTopology(): void {
       paths.push(
         `<path class="topology-edge aggregate${selected ? " selected" : ""}${item.fresh ? " fresh" : ""}" d="${path}" pathLength="1" data-topology-edge="${key}"></path>` +
         (item.selectedConnectionId
-          ? `<path class="topology-hit" d="${path}" data-topology-hit="${key}" data-topology-connection="${escapeHtml(item.selectedConnectionId)}" tabindex="0" role="button" aria-label="Inspect the selected connection within ${item.count} grouped client connections"></path>`
+          ? `<path class="topology-hit" d="${path}" data-topology-hit="${key}" data-topology-connection="${escapeHtml(item.selectedConnectionId)}"></path>`
           : ""),
       );
       nodes.push(
@@ -1104,13 +1106,10 @@ function renderTopology(): void {
       (selected ? " selected" : "") +
       (connection.fresh ? " fresh" : "");
     const inspected = selected && state.perspective === "client";
-    const ariaLabel =
-      `Inspect connection from ${connection.clientIp}:${connection.clientPort} ` +
-      `to nginx ${SERVER}:${LOCAL_PORT}`;
 
     paths.push(
       `<path class="topology-edge${classes}" d="${path}" pathLength="1" data-topology-edge="${key}"></path>` +
-      `<path class="topology-hit" d="${path}" data-topology-hit="${key}" data-topology-connection="${escapeHtml(connection.id)}" tabindex="0" role="button" aria-label="${escapeHtml(ariaLabel)}"></path>`,
+      `<path class="topology-hit" d="${path}" data-topology-hit="${key}" data-topology-connection="${escapeHtml(connection.id)}"></path>`,
     );
     nodes.push(
       `<button class="topology-node topology-client${classes}${inspected ? " inspected" : ""}" style="--node-y:${top}%" type="button" data-topology-item="${key}" data-topology-connection="${escapeHtml(connection.id)}" aria-pressed="${selected}">` +
@@ -1377,6 +1376,8 @@ function commitClientConnection(): void {
   }
 
   markSelectedConnection(connection.id);
+  // Accepting from the empty state restores the list role for the new item.
+  connectionList.setAttribute("role", "list");
   const card = connectionCard(connection);
   connectionList.appendChild(card);
 
@@ -1450,6 +1451,10 @@ function render(options: RenderOptions = {}): void {
   connectionList.replaceChildren();
 
   if (connectionCount === 0) {
+    // The empty-state message is not a list item, so the container drops its
+    // list role until real connection items exist again (a role="list" may only
+    // contain listitem children).
+    connectionList.removeAttribute("role");
     const emptyState = document.createElement("div");
     emptyState.className = "connections-empty";
     emptyState.innerHTML =
@@ -1458,6 +1463,7 @@ function render(options: RenderOptions = {}): void {
       `<p>nginx is still listening on ${SERVER}:${LOCAL_PORT}.</p>`;
     connectionList.appendChild(emptyState);
   } else {
+    connectionList.setAttribute("role", "list");
     state.connections.forEach((connection) => {
       connectionList.appendChild(connectionCard(connection));
     });
@@ -1534,23 +1540,6 @@ topology.addEventListener("click", (event) => {
   const connectionIdFromTopology = topologyConnectionId(event.target);
 
   if (connectionIdFromTopology) {
-    inspectConnectionFromTopology(connectionIdFromTopology);
-  }
-});
-
-topology.addEventListener("keydown", (event) => {
-  if (event.target instanceof HTMLButtonElement) {
-    return;
-  }
-
-  if (event.key !== "Enter" && event.key !== " ") {
-    return;
-  }
-
-  const connectionIdFromTopology = topologyConnectionId(event.target);
-
-  if (connectionIdFromTopology) {
-    event.preventDefault();
     inspectConnectionFromTopology(connectionIdFromTopology);
   }
 });
