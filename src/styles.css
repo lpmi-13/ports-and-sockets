@@ -7,7 +7,7 @@
   --line-2: #3a3b45;
   --text: #ece9e3;
   --muted: #a7a49c;
-  --muted-2: #7b7870;
+  --muted-2: #8f8c83;
 
   --accent: #a879ff;
   --accent-deep: #8e62e5;
@@ -389,11 +389,6 @@ body > * {
   stroke-width: 18;
   cursor: pointer;
   pointer-events: stroke;
-}
-
-.topology-hit:focus-visible {
-  stroke: color-mix(in srgb, var(--accent) 24%, transparent);
-  outline: none;
 }
 
 @keyframes topology-flow {

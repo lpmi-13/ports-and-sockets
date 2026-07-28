@@ -1,14 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#0e0f13"/>
-  <!-- Brand mark: wire/port (amber), socket (sage, middle),
-       process/fd (slate blue) — with the violet connection resting on the socket -->
-  <rect x="12" y="13" width="40" height="9"  rx="2.5" fill="#dca24f"/>
-  <rect x="12" y="27" width="40" height="10" rx="2.5" fill="#63c58c"/>
-  <rect x="12" y="42" width="40" height="9"  rx="2.5" fill="#6f9fd8"/>
-  <!-- the port descends into the socket, the fd rises into it -->
-  <path d="M32 22 l4 4 -8 0 z" fill="#dca24f"/>
-  <path d="M32 42 l4 -4 -8 0 z" fill="#6f9fd8"/>
-  <!-- the connection lives in the socket -->
-  <circle cx="32" cy="32" r="3.7" fill="#a879ff" stroke="#0e0f13" stroke-width="1.4"/>
-  <circle cx="32" cy="32" r="3.7" fill="none" stroke="#a879ff" stroke-opacity="0.3" stroke-width="3"/>
+  <rect width="64" height="64" rx="13" fill="#0e0f13"/>
+  <!-- Brand mark: the "≠" from "Ports ≠ Sockets", in accent purple -->
+  <g stroke="#a879ff" stroke-width="7" stroke-linecap="round">
+    <!-- the two "equals" bars -->
+    <line x1="18" y1="26" x2="46" y2="26"/>
+    <line x1="18" y1="38" x2="46" y2="38"/>
+    <!-- the slash: a dark halo lifts it clear of the bars, then the purple stroke -->
+    <line x1="21" y1="49" x2="43" y2="15" stroke="#0e0f13" stroke-width="12.5"/>
+    <line x1="21" y1="49" x2="43" y2="15"/>
+  </g>
 </svg>
