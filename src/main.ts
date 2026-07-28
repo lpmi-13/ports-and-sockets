@@ -411,6 +411,8 @@ function connectionDetails(connection: Connection): string {
     state.perspective === "client" ? "client host" : "nginx server";
 
   return (
+    '<div class="reference-journey">' +
+    '<div class="reference-scroll-cue" aria-hidden="true"><span>Swipe horizontally</span><i>→</i></div>' +
     `<div class="reference-scroller" tabindex="0" aria-label="Port, socket, and file descriptor references on the ${perspectiveLabel} for the connection from ${escapeHtml(connection.clientIp)}:${connection.clientPort}">` +
     '<div class="reference-track">' +
     portReference(connection) +
@@ -419,6 +421,7 @@ function connectionDetails(connection: Connection): string {
     '<span class="reference-arrow" aria-hidden="true">→</span>' +
     fdReference(connection) +
     "</div>" +
+    "</div>" +
     "</div>"
   );
 }
@@ -426,12 +429,32 @@ function connectionDetails(connection: Connection): string {
 function bindReferenceScroller(article: HTMLElement): void {
   const scroller =
     article.querySelector<HTMLElement>(".reference-scroller");
+  const scrollCue =
+    article.querySelector<HTMLElement>(".reference-scroll-cue");
 
   if (!scroller || scroller.dataset.bound === "true") {
     return;
   }
 
   scroller.dataset.bound = "true";
+  const updateScrollCue = (): void => {
+    if (!scrollCue) {
+      return;
+    }
+
+    if (scroller.scrollWidth <= scroller.clientWidth + 1) {
+      scrollCue.hidden = true;
+      return;
+    }
+
+    if (scroller.scrollLeft > 12) {
+      scrollCue.classList.add("dismissed");
+    }
+  };
+
+  scroller.addEventListener("scroll", updateScrollCue, {
+    passive: true,
+  });
   scroller.addEventListener("keydown", (event) => {
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       event.preventDefault();
@@ -441,6 +464,7 @@ function bindReferenceScroller(article: HTMLElement): void {
       });
     }
   });
+  window.requestAnimationFrame(updateScrollCue);
 }
 
 function ensureConnectionDetails(

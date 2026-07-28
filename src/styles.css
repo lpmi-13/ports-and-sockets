@@ -956,6 +956,14 @@ button.topology-node {
   scrollbar-width: thin;
 }
 
+.reference-journey {
+  position: relative;
+}
+
+.reference-scroll-cue {
+  display: none;
+}
+
 .reference-track {
   display: grid;
   grid-template-columns:
@@ -1535,6 +1543,57 @@ button.topology-node {
 }
 
 @media (max-width: 860px) {
+  .reference-scroll-cue {
+    display: flex;
+    width: max-content;
+    align-items: center;
+    gap: 7px;
+    margin: 8px 14px 0 auto;
+    padding: 5px 8px 5px 10px;
+    border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+    border-radius: 999px;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    pointer-events: none;
+    transition: opacity 280ms var(--expand-ease);
+  }
+
+  .reference-scroll-cue i {
+    color: var(--accent);
+    font-size: 12px;
+    font-style: normal;
+    animation: reference-scroll-cue 1.8s var(--expand-ease) infinite;
+  }
+
+  .reference-scroll-cue.dismissed {
+    opacity: 0;
+  }
+
+  .reference-scroll-cue.dismissed i {
+    animation: none;
+  }
+
+  @keyframes reference-scroll-cue {
+    0%,
+    52%,
+    100% {
+      transform: translateX(0);
+    }
+
+    72% {
+      transform: translateX(3px);
+    }
+  }
+
+  .reference-journey .reference-scroller {
+    padding-top: 8px;
+  }
+
   .reference-track {
     display: flex;
     align-items: stretch;
@@ -1555,6 +1614,10 @@ button.topology-node {
 }
 
 @media (max-width: 640px) {
+  #scenario {
+    display: none;
+  }
+
   .connections-head {
     align-items: stretch;
     flex-direction: column;
