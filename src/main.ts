@@ -412,7 +412,8 @@ function connectionDetails(connection: Connection): string {
 
   return (
     '<div class="reference-journey">' +
-    '<div class="reference-scroll-cue" aria-hidden="true"><span>Swipe horizontally</span><i>→</i></div>' +
+    '<button class="reference-scroll-cue reference-scroll-cue-left" type="button" aria-label="Scroll to the previous connection reference" disabled><i aria-hidden="true">‹</i></button>' +
+    '<button class="reference-scroll-cue reference-scroll-cue-right" type="button" aria-label="Scroll to the next connection reference" disabled><i aria-hidden="true">›</i></button>' +
     `<div class="reference-scroller" tabindex="0" aria-label="Port, socket, and file descriptor references on the ${perspectiveLabel} for the connection from ${escapeHtml(connection.clientIp)}:${connection.clientPort}">` +
     '<div class="reference-track">' +
     portReference(connection) +
@@ -429,8 +430,10 @@ function connectionDetails(connection: Connection): string {
 function bindReferenceScroller(article: HTMLElement): void {
   const scroller =
     article.querySelector<HTMLElement>(".reference-scroller");
-  const scrollCue =
-    article.querySelector<HTMLElement>(".reference-scroll-cue");
+  const leftScrollCue =
+    article.querySelector<HTMLButtonElement>(".reference-scroll-cue-left");
+  const rightScrollCue =
+    article.querySelector<HTMLButtonElement>(".reference-scroll-cue-right");
 
   if (!scroller || scroller.dataset.bound === "true") {
     return;
@@ -438,22 +441,68 @@ function bindReferenceScroller(article: HTMLElement): void {
 
   scroller.dataset.bound = "true";
   const updateScrollCue = (): void => {
-    if (!scrollCue) {
+    if (!leftScrollCue || !rightScrollCue) {
       return;
     }
 
-    if (scroller.scrollWidth <= scroller.clientWidth + 1) {
-      scrollCue.hidden = true;
-      return;
-    }
+    const edgeTolerance = 2;
+    const maxScrollLeft = Math.max(
+      0,
+      scroller.scrollWidth - scroller.clientWidth,
+    );
 
-    if (scroller.scrollLeft > 12) {
-      scrollCue.classList.add("dismissed");
+    const canScrollLeft = scroller.scrollLeft > edgeTolerance;
+    const canScrollRight =
+      scroller.scrollLeft < maxScrollLeft - edgeTolerance;
+
+    leftScrollCue.classList.toggle("visible", canScrollLeft);
+    leftScrollCue.disabled = !canScrollLeft;
+    rightScrollCue.classList.toggle("visible", canScrollRight);
+    rightScrollCue.disabled = !canScrollRight;
+  };
+
+  const scrollToAdjacentReference = (direction: -1 | 1): void => {
+    const cards = Array.from(
+      scroller.querySelectorAll<HTMLElement>(".reference-card"),
+    );
+    const scrollerRect = scroller.getBoundingClientRect();
+    const paddingLeft =
+      Number.parseFloat(window.getComputedStyle(scroller).paddingLeft) || 0;
+    const snapPositions = cards.map(
+      (card) =>
+        scroller.scrollLeft +
+        card.getBoundingClientRect().left -
+        scrollerRect.left -
+        paddingLeft,
+    );
+    const positionTolerance = 4;
+    const target =
+      direction === 1
+        ? snapPositions.find(
+            (position) =>
+              position > scroller.scrollLeft + positionTolerance,
+          )
+        : [...snapPositions].reverse().find(
+            (position) =>
+              position < scroller.scrollLeft - positionTolerance,
+          );
+
+    if (typeof target === "number") {
+      scroller.scrollTo({
+        left: target,
+        behavior: "smooth",
+      });
     }
   };
 
   scroller.addEventListener("scroll", updateScrollCue, {
     passive: true,
+  });
+  leftScrollCue?.addEventListener("click", () => {
+    scrollToAdjacentReference(-1);
+  });
+  rightScrollCue?.addEventListener("click", () => {
+    scrollToAdjacentReference(1);
   });
   scroller.addEventListener("keydown", (event) => {
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
@@ -464,7 +513,11 @@ function bindReferenceScroller(article: HTMLElement): void {
       });
     }
   });
-  window.requestAnimationFrame(updateScrollCue);
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(updateScrollCue);
+  });
+
+  new ResizeObserver(updateScrollCue).observe(scroller);
 }
 
 function ensureConnectionDetails(

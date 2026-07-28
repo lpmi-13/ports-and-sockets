@@ -1544,41 +1544,84 @@ button.topology-node {
 
 @media (max-width: 860px) {
   .reference-scroll-cue {
+    position: absolute;
+    z-index: 3;
+    top: 50%;
     display: flex;
-    width: max-content;
+    width: 44px;
+    height: 58px;
+    padding: 0;
+    border: 0;
     align-items: center;
-    gap: 7px;
-    margin: 8px 14px 0 auto;
-    padding: 5px 8px 5px 10px;
-    border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
-    border-radius: 999px;
-    color: var(--muted);
-    background: color-mix(in srgb, var(--accent) 7%, var(--surface));
-    font-family: var(--mono);
-    font-size: 8px;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-    line-height: 1;
+    justify-content: center;
+    opacity: 0;
+    cursor: pointer;
     pointer-events: none;
-    transition: opacity 280ms var(--expand-ease);
+    transform: translateY(-50%);
+    transition:
+      opacity 280ms var(--expand-ease),
+      transform 280ms var(--expand-ease);
+  }
+
+  .reference-scroll-cue-left {
+    left: 8px;
+    background: linear-gradient(
+      270deg,
+      transparent,
+      color-mix(in srgb, var(--bg-2) 88%, transparent) 58%
+    );
+  }
+
+  .reference-scroll-cue-right {
+    right: 8px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--bg-2) 88%, transparent) 58%
+    );
   }
 
   .reference-scroll-cue i {
-    color: var(--accent);
-    font-size: 12px;
+    display: grid;
+    width: 25px;
+    height: 25px;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+    border-radius: 50%;
+    color: color-mix(in srgb, var(--accent) 76%, var(--text));
+    background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 11%, transparent);
+    font-family: system-ui, sans-serif;
+    font-size: 28px;
+    font-weight: 300;
     font-style: normal;
-    animation: reference-scroll-cue 1.8s var(--expand-ease) infinite;
+    line-height: 0.7;
+    text-indent: 1px;
   }
 
-  .reference-scroll-cue.dismissed {
-    opacity: 0;
+  .reference-scroll-cue-left i {
+    animation: reference-scroll-cue-left 1.8s var(--expand-ease) infinite;
   }
 
-  .reference-scroll-cue.dismissed i {
-    animation: none;
+  .reference-scroll-cue-right i {
+    animation: reference-scroll-cue-right 1.8s var(--expand-ease) infinite;
   }
 
-  @keyframes reference-scroll-cue {
+  .reference-scroll-cue.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .reference-scroll-cue:focus-visible {
+    outline: none;
+  }
+
+  .reference-scroll-cue:focus-visible i {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @keyframes reference-scroll-cue-right {
     0%,
     52%,
     100% {
@@ -1590,8 +1633,20 @@ button.topology-node {
     }
   }
 
+  @keyframes reference-scroll-cue-left {
+    0%,
+    52%,
+    100% {
+      transform: translateX(0);
+    }
+
+    72% {
+      transform: translateX(-3px);
+    }
+  }
+
   .reference-journey .reference-scroller {
-    padding-top: 8px;
+    padding-top: 15px;
   }
 
   .reference-track {
