@@ -26,6 +26,11 @@
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
+  for = "/social-card.png"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
   for = "/social-card.svg"
   [headers.values]
     Cache-Control = "public, max-age=86400"
