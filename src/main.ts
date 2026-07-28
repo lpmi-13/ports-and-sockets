@@ -1222,11 +1222,17 @@ function scheduleNewConnectionNoticeUpdate(): void {
 }
 
 function updateNewConnectionNotice(): void {
-  const usableTop = (topbar?.getBoundingClientRect().bottom ?? 0) + 8;
   const usableBottom =
     Math.min(window.innerHeight, controlbar.getBoundingClientRect().top) - 10;
-  const hiddenBelow: string[] = [];
+  let hiddenBelow = 0;
 
+  // Recount how many tracked connections currently sit below the viewport on
+  // every pass. Visibility must never remove a connection from the tracked set:
+  // scrolling a card into view only means it is no longer *below* right now, not
+  // that it should stop being counted. Dropping it here would make the count a
+  // one-way ratchet — it could fall as cards scroll into view but never climb
+  // back when they scroll below again. Only genuinely closed connections (no
+  // card in the DOM) leave the set.
   unseenConnectionIds = unseenConnectionIds.filter((id) => {
     const card = connectionList.querySelector<HTMLElement>(
       `[data-connection-id="${id}"]`,
@@ -1236,29 +1242,28 @@ function updateNewConnectionNotice(): void {
       return false;
     }
 
+    // Fresh cards are still animating in; keep tracking them but wait until they
+    // settle before counting them below the fold.
     if (card.classList.contains("fresh")) {
       return true;
     }
 
-    const bounds = card.getBoundingClientRect();
-
-    if (bounds.bottom <= usableTop || bounds.bottom <= usableBottom) {
-      return false;
+    if (card.getBoundingClientRect().bottom > usableBottom) {
+      hiddenBelow += 1;
     }
 
-    hiddenBelow.push(id);
     return true;
   });
 
-  if (hiddenBelow.length === 0) {
+  if (hiddenBelow === 0) {
     newConnectionNotice.hidden = true;
     return;
   }
 
   const label =
-    hiddenBelow.length === 1
+    hiddenBelow === 1
       ? "New connection below"
-      : `${hiddenBelow.length} new connections below`;
+      : `${hiddenBelow} new connections below`;
   newConnectionNoticeLabel.textContent = label;
   newConnectionNotice.setAttribute("aria-label", `${label}. Show it.`);
   newConnectionNotice.hidden = false;
@@ -1281,20 +1286,24 @@ function queueNewConnectionNotice(id: string): void {
 }
 
 function revealNewestConnection(): void {
-  const targetId =
-    unseenConnectionIds[unseenConnectionIds.length - 1];
-
-  if (!targetId) {
-    newConnectionNotice.hidden = true;
-    return;
-  }
-
-  const card = connectionList.querySelector<HTMLElement>(
-    `[data-connection-id="${targetId}"]`,
+  // Drop only connections whose cards are gone (closed); keep every one that is
+  // still present. Jumping to the newest must NOT consume the tracked set: after
+  // the jump those connections sit above the fold and the notice hides, but
+  // scrolling back up has to be able to surface them again. Wiping the set here
+  // was the bug — it left nothing to recount, so the count could never return.
+  unseenConnectionIds = unseenConnectionIds.filter(
+    (id) =>
+      connectionList.querySelector(`[data-connection-id="${id}"]`) !== null,
   );
 
+  const targetId = unseenConnectionIds[unseenConnectionIds.length - 1];
+  const card = targetId
+    ? connectionList.querySelector<HTMLElement>(
+        `[data-connection-id="${targetId}"]`,
+      )
+    : null;
+
   if (!card) {
-    unseenConnectionIds = [];
     newConnectionNotice.hidden = true;
     return;
   }
@@ -1307,7 +1316,6 @@ function revealNewestConnection(): void {
     "(prefers-reduced-motion: reduce)",
   ).matches;
 
-  unseenConnectionIds = [];
   newConnectionNotice.hidden = true;
   window.scrollTo({
     top: Math.max(0, targetTop),
