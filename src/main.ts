@@ -1286,20 +1286,24 @@ function queueNewConnectionNotice(id: string): void {
 }
 
 function revealNewestConnection(): void {
-  const targetId =
-    unseenConnectionIds[unseenConnectionIds.length - 1];
-
-  if (!targetId) {
-    newConnectionNotice.hidden = true;
-    return;
-  }
-
-  const card = connectionList.querySelector<HTMLElement>(
-    `[data-connection-id="${targetId}"]`,
+  // Drop only connections whose cards are gone (closed); keep every one that is
+  // still present. Jumping to the newest must NOT consume the tracked set: after
+  // the jump those connections sit above the fold and the notice hides, but
+  // scrolling back up has to be able to surface them again. Wiping the set here
+  // was the bug — it left nothing to recount, so the count could never return.
+  unseenConnectionIds = unseenConnectionIds.filter(
+    (id) =>
+      connectionList.querySelector(`[data-connection-id="${id}"]`) !== null,
   );
 
+  const targetId = unseenConnectionIds[unseenConnectionIds.length - 1];
+  const card = targetId
+    ? connectionList.querySelector<HTMLElement>(
+        `[data-connection-id="${targetId}"]`,
+      )
+    : null;
+
   if (!card) {
-    unseenConnectionIds = [];
     newConnectionNotice.hidden = true;
     return;
   }
@@ -1312,7 +1316,6 @@ function revealNewestConnection(): void {
     "(prefers-reduced-motion: reduce)",
   ).matches;
 
-  unseenConnectionIds = [];
   newConnectionNotice.hidden = true;
   window.scrollTo({
     top: Math.max(0, targetTop),
