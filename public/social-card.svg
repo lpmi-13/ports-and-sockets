@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">Ports ≠ Sockets — one connection, three names</title>
-  <desc id="desc">A TCP connection from a remote host to nginx expands into its port, kernel socket, and file descriptor references.</desc>
+  <desc id="desc">A TCP connection from a public client host to nginx expands into its port, local kernel socket, and process file descriptor references.</desc>
   <defs>
     <radialGradient id="bg" cx="50%" cy="-8%" r="95%">
       <stop offset="0%" stop-color="#17151d"/>
@@ -24,7 +24,7 @@
   <!-- the connection is the primary object -->
   <g>
     <rect x="72" y="184" width="1056" height="104" rx="14" fill="#191a20" stroke="#a879ff" stroke-width="2"/>
-    <text x="100" y="218" class="mono label" fill="#7b7870">REMOTE HOST</text>
+    <text x="100" y="218" class="mono label" fill="#7b7870">CLIENT HOST</text>
     <text x="100" y="251" class="mono" fill="#ece9e3" font-size="21">203.0.113.55:<tspan fill="#dca24f">54321</tspan></text>
 
     <line x1="390" y1="239" x2="825" y2="239" stroke="#a879ff" stroke-width="3"/>
@@ -33,7 +33,7 @@
     <text x="586" y="220" class="mono" fill="#63c58c" font-size="13">ESTAB</text>
 
     <text x="1098" y="218" class="mono label" fill="#7b7870" text-anchor="end">NGINX</text>
-    <text x="1098" y="251" class="mono" fill="#ece9e3" font-size="21" text-anchor="end">192.168.1.10:<tspan fill="#dca24f">80</tspan></text>
+    <text x="1098" y="251" class="mono" fill="#ece9e3" font-size="21" text-anchor="end">198.51.100.80:<tspan fill="#dca24f">80</tspan></text>
   </g>
 
   <!-- the expanded horizontal reference journey -->
@@ -45,7 +45,7 @@
     <text x="94" y="392" class="serif" fill="#ece9e3" font-size="27">Addressed on the wire</text>
     <text x="94" y="436" class="mono" fill="#a7a49c" font-size="17">203.0.113.55:<tspan fill="#dca24f">54321</tspan></text>
     <text x="224" y="471" class="mono" fill="#dca24f" font-size="18">↓</text>
-    <text x="94" y="510" class="mono" fill="#a7a49c" font-size="17">192.168.1.10:<tspan fill="#dca24f">80</tspan></text>
+    <text x="94" y="510" class="mono" fill="#a7a49c" font-size="17">198.51.100.80:<tspan fill="#dca24f">80</tspan></text>
 
     <text x="414" y="444" class="mono" fill="#7b7870" font-size="22">→</text>
 
@@ -55,7 +55,7 @@
     <text x="742" y="349" class="serif" fill="#63c58c" font-size="22" text-anchor="end">Socket</text>
     <text x="460" y="392" class="serif" fill="#ece9e3" font-size="27">socket:[12346]</text>
     <text x="460" y="432" class="mono" fill="#a7a49c" font-size="15">203.0.113.55  ·  54321</text>
-    <text x="460" y="466" class="mono" fill="#a7a49c" font-size="15">192.168.1.10  ·  <tspan fill="#dca24f">80</tspan></text>
+    <text x="460" y="466" class="mono" fill="#a7a49c" font-size="15">198.51.100.80  ·  <tspan fill="#dca24f">80</tspan></text>
     <text x="460" y="500" class="mono" fill="#63c58c" font-size="15">TCP</text>
 
     <text x="780" y="444" class="mono" fill="#7b7870" font-size="22">→</text>

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ports ≠ Sockets — one connection, three names</title>
-  <meta name="description" content="Explore nginx TCP connections as expandable lanes from remote hosts to the server, then follow each connection through its port, kernel socket, and file descriptor references." />
+  <meta name="description" content="Explore many client connections converging on nginx, switch between client and server hosts, and follow each connection through its port, local kernel socket, and process file descriptor." />
   <meta name="theme-color" content="#0e0f13" />
   <link rel="canonical" href="https://ports-and-sockets.netlify.app/" />
 
@@ -13,12 +13,12 @@
   <meta property="og:url" content="https://ports-and-sockets.netlify.app/" />
   <meta property="og:site_name" content="Ports ≠ Sockets" />
   <meta property="og:title" content="Ports ≠ Sockets — one connection, three names" />
-  <meta property="og:description" content="Open one nginx connection and follow its three references: port on the wire, socket in the kernel, and file descriptor in the process." />
+  <meta property="og:description" content="Inspect one nginx connection from either host and follow its three local references: port, kernel socket, and process file descriptor." />
   <meta property="og:image" content="https://ports-and-sockets.netlify.app/social-card.svg" />
   <meta property="og:image:alt" content="One connection, three names — a port on the wire, a socket in the kernel, a file descriptor in the process." />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Ports ≠ Sockets — one connection, three names" />
-  <meta name="twitter:description" content="Explore each nginx connection as a remote endpoint, kernel socket, and process-local file descriptor." />
+  <meta name="twitter:description" content="Explore many clients converging on nginx, then inspect either host's port, socket, and file descriptor." />
   <meta name="twitter:image" content="https://ports-and-sockets.netlify.app/social-card.svg" />
 
   <link rel="icon" href="/src/favicon.svg" type="image/svg+xml" />
@@ -38,33 +38,38 @@
     </div>
   </header>
 
-  <main id="stage" tabindex="0" aria-label="Active TCP connections from remote hosts to nginx. Open a connection to see its port, kernel socket, and nginx file descriptor references.">
+  <main id="stage" tabindex="0" aria-label="Active TCP connections from public client hosts to nginx. Switch between the client and server perspective, then open a connection to see that host's port, kernel socket, and file descriptor references.">
     <div id="req-label" aria-live="polite"></div>
     <div id="scenario">
-      <strong>One TCP connection.</strong>
-      Outside the host it is addressed by IP and ports. The kernel owns a socket. nginx holds a file descriptor.
+      <strong>Every TCP connection spans two hosts.</strong>
+      Each kernel owns a local socket. Each process holds its own file descriptor.
     </div>
 
     <section id="connections-stage" aria-labelledby="connections-title">
       <header class="connections-head">
         <div class="connections-intro">
           <span class="eyebrow">Active TCP connections</span>
-          <h1 id="connections-title">Remote hosts → nginx</h1>
-          <p>Open a connection to follow its three references.</p>
+          <h1 id="connections-title">Client hosts → nginx</h1>
+          <p>Choose a host, then open a connection to inspect its local references.</p>
         </div>
-        <div class="server-summary" aria-label="nginx server endpoint">
-          <span class="server-icon" aria-hidden="true"></span>
-          <span class="server-summary-copy">
-            <span>nginx server</span>
-            <strong>192.168.1.10:<b>80</b></strong>
-          </span>
+        <div class="perspective-control" role="group" aria-labelledby="perspective-label">
+          <span class="eyebrow" id="perspective-label">Inspect from</span>
+          <div class="perspective-options">
+            <button type="button" data-perspective="client" aria-pressed="false">Client host</button>
+            <button type="button" data-perspective="server" aria-pressed="true">Server host</button>
+          </div>
         </div>
       </header>
+      <div id="topology" class="topology"></div>
       <div id="connection-list" class="connection-list" role="list"></div>
     </section>
   </main>
 
   <footer id="controlbar">
+    <button id="new-connection-notice" class="new-connection-notice" type="button" hidden>
+      <span id="new-connection-notice-label" role="status" aria-live="polite"></span>
+      <span class="new-connection-notice-arrow" aria-hidden="true">↓</span>
+    </button>
     <div id="controls">
       <button class="step-btn accent" id="accept">＋&nbsp;Accept a client</button>
       <button class="step-btn" id="close">Close selected</button>

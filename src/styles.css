@@ -13,6 +13,7 @@
   --accent-deep: #8e62e5;
   --accent-soft: rgba(168, 121, 255, 0.14);
   --expand-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --connection-ease: cubic-bezier(0.16, 1, 0.3, 1);
 
   --c-port: #dca24f;
   --c-socket: #63c58c;
@@ -34,6 +35,7 @@
 html {
   min-height: 100%;
   background: var(--bg);
+  overflow-anchor: none;
 }
 
 body {
@@ -241,57 +243,325 @@ body > * {
   font-size: 12px;
 }
 
-.server-summary {
+.perspective-control {
   display: flex;
   flex: none;
-  align-items: center;
-  gap: 10px;
-  min-width: 270px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--c-port) 48%, var(--line));
-  border-radius: 10px;
-  background:
-    linear-gradient(120deg, rgba(220, 162, 79, 0.06), transparent 58%),
-    var(--surface);
-}
-
-.server-icon {
-  width: 27px;
-  height: 19px;
-  border: 1px solid color-mix(in srgb, var(--c-port) 72%, var(--line));
-  border-radius: 4px;
-  background:
-    radial-gradient(circle at 7px 6px, var(--c-port) 0 1.4px, transparent 2px),
-    radial-gradient(circle at 7px 12px, var(--c-port) 0 1.4px, transparent 2px),
-    linear-gradient(var(--line-2), var(--line-2)) 13px 6px / 8px 1px no-repeat,
-    linear-gradient(var(--line-2), var(--line-2)) 13px 12px / 8px 1px no-repeat;
-}
-
-.server-summary-copy {
-  display: flex;
-  flex: 1;
   flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  align-items: flex-end;
+  gap: 7px;
 }
 
-.server-summary-copy > span {
-  color: var(--muted-2);
-  font-size: 8.5px;
+.perspective-options {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.perspective-options button {
+  min-width: 104px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.09em;
+  cursor: pointer;
+  transition:
+    color 260ms var(--expand-ease),
+    background 360ms var(--expand-ease),
+    box-shadow 360ms var(--expand-ease);
+}
+
+.perspective-options button:hover {
+  color: var(--text);
+}
+
+.perspective-options button.active {
+  color: var(--text);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 48%, transparent);
+}
+
+.topology {
+  position: relative;
+  isolation: isolate;
+  contain: layout paint;
+  width: 100%;
+  height: 280px;
+  margin-bottom: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 78% 50%, rgba(220, 162, 79, 0.055), transparent 23%),
+    linear-gradient(100deg, rgba(168, 121, 255, 0.035), transparent 40%),
+    var(--surface);
+  overflow: hidden;
+}
+
+.topology-kicker {
+  position: absolute;
+  z-index: 3;
+  top: 13px;
+  right: 3%;
+  left: 3%;
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted-2);
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.topology-lines {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.topology-edge,
+.topology-trunk,
+.topology-hit {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.topology-edge {
+  stroke: color-mix(in srgb, var(--accent) 42%, var(--line-2));
+  stroke-width: 1.4;
+  opacity: 0.72;
+  transition:
+    stroke 360ms var(--expand-ease),
+    opacity 360ms var(--expand-ease);
+}
+
+.topology-edge.aggregate {
+  stroke: var(--line-2);
+  stroke-dasharray: 0.025 0.025;
+  opacity: 0.62;
+}
+
+.topology-edge.selected {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  stroke-dasharray: 0.028 0.024;
+  opacity: 1;
+  animation: topology-flow 2.4s linear infinite;
+}
+
+.topology-edge.fresh {
+  animation: topology-edge-in 720ms var(--connection-ease) both;
+}
+
+.topology-edge.selected.fresh {
+  animation:
+    topology-edge-in 720ms var(--connection-ease) both,
+    topology-flow 2.4s 720ms linear infinite;
+}
+
+.topology-trunk {
+  stroke: color-mix(in srgb, var(--accent) 72%, var(--line-2));
+  stroke-width: 2;
+}
+
+.topology-trunk.fresh {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: topology-trunk-in 260ms var(--connection-ease) 520ms both;
+}
+
+#topology-arrow path {
+  fill: var(--accent);
+}
+
+.topology-hit {
+  stroke: transparent;
+  stroke-width: 18;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.topology-hit:focus-visible {
+  stroke: color-mix(in srgb, var(--accent) 24%, transparent);
+  outline: none;
+}
+
+@keyframes topology-flow {
+  to {
+    stroke-dashoffset: -0.104;
+  }
+}
+
+@keyframes topology-edge-in {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@keyframes topology-trunk-in {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.topology-node {
+  position: absolute;
+  z-index: 2;
+  top: var(--node-y);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 50px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--surface-raised);
+  text-align: left;
+  transform: translateY(-50%);
+  transition:
+    border-color 360ms var(--expand-ease),
+    background 360ms var(--expand-ease),
+    box-shadow 360ms var(--expand-ease),
+    opacity 360ms var(--expand-ease);
+}
+
+.topology-node.fresh {
+  animation: topology-node-in 520ms var(--connection-ease) both;
+}
+
+@keyframes topology-node-in {
+  from {
+    opacity: 0;
+    transform: translate(-10px, -50%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+
+button.topology-node {
+  width: 20%;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.topology-client {
+  left: 3%;
+}
+
+.topology-server {
+  right: 3%;
+  width: 23%;
+  border-color: color-mix(in srgb, var(--c-port) 46%, var(--line));
+  background:
+    linear-gradient(120deg, rgba(220, 162, 79, 0.07), transparent 68%),
+    var(--surface-raised);
+}
+
+.topology-node > span {
+  color: var(--muted-2);
+  font-family: var(--mono);
+  font-size: 7.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.server-summary-copy strong {
+.topology-node strong {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 500;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.server-summary-copy b {
+.topology-node strong b {
   color: var(--c-port);
+  font-weight: 600;
+}
+
+.topology-node small {
+  color: var(--muted-2);
+  font-size: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topology-client:hover,
+.topology-client.selected {
+  border-color: color-mix(in srgb, var(--accent) 66%, var(--line));
+}
+
+.topology-node.inspected {
+  border-color: var(--accent);
+  background:
+    linear-gradient(120deg, rgba(168, 121, 255, 0.1), transparent 70%),
+    var(--surface-raised);
+  box-shadow:
+    0 0 0 1px rgba(168, 121, 255, 0.12),
+    0 12px 26px -22px var(--accent);
+}
+
+.topology-node.inspected > span::after {
+  margin-left: 6px;
+  color: var(--accent);
+  content: "· inspecting";
+}
+
+.topology-cluster {
+  width: 20%;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--surface-raised) 76%, transparent);
+}
+
+.topology-empty-client {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 3%;
+  display: flex;
+  width: 20%;
+  min-height: 55px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 9px 11px;
+  border: 1px dashed var(--line-2);
+  border-radius: 9px;
+  color: var(--muted);
+  transform: translateY(-50%);
+}
+
+.topology-empty-client span {
+  font-family: var(--serif);
+  font-size: 12px;
+}
+
+.topology-empty-client small {
+  color: var(--muted-2);
+  font-size: 8px;
 }
 
 .connection-list {
@@ -299,7 +569,46 @@ body > * {
   gap: 10px;
 }
 
+.connection-list.transitioning-from-empty {
+  position: relative;
+  align-items: start;
+  animation: connection-list-from-empty 900ms var(--connection-ease) both;
+}
+
+.connection-list.transitioning-from-empty .connections-empty {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+}
+
+.connection-list.transitioning-from-empty .connections-empty.leaving {
+  animation: connections-empty-out 420ms var(--connection-ease) both;
+}
+
+@keyframes connection-list-from-empty {
+  from {
+    min-height: 220px;
+  }
+
+  to {
+    min-height: 83px;
+  }
+}
+
+@keyframes connections-empty-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.995);
+  }
+}
+
 .connection-card {
+  scroll-margin-bottom: 96px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);
@@ -322,17 +631,25 @@ body > * {
 }
 
 .connection-card.fresh {
-  animation: connection-in 440ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  pointer-events: none;
+  will-change: max-height, opacity, transform;
+  animation: connection-card-in 900ms var(--connection-ease) both;
 }
 
-@keyframes connection-in {
-  from {
+@keyframes connection-card-in {
+  0% {
+    max-height: 0;
+    border-color: transparent;
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(-12px) scale(0.995);
   }
 
-  to {
+  52% {
     opacity: 1;
+  }
+
+  100% {
+    max-height: 120px;
     transform: none;
   }
 }
@@ -372,6 +689,9 @@ body > * {
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+  transition:
+    opacity 360ms var(--expand-ease),
+    text-shadow 360ms var(--expand-ease);
 }
 
 .lane-endpoint > span {
@@ -394,6 +714,19 @@ body > * {
 .lane-endpoint b {
   color: var(--c-port);
   font-weight: 600;
+}
+
+.lane-endpoint.inspected {
+  text-shadow: 0 0 16px rgba(168, 121, 255, 0.2);
+}
+
+.lane-endpoint.inspected > span {
+  color: var(--accent);
+}
+
+.lane-endpoint.inspected > span::after {
+  margin-left: 5px;
+  content: "· inside";
 }
 
 .lane-server {
@@ -426,7 +759,15 @@ body > * {
   width: 100%;
   height: 2px;
   margin-top: 9px;
+}
+
+.thread-line::before {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 48%, var(--line-2));
+  content: "";
+  transform-origin: left center;
   transition:
     background 180ms ease,
     box-shadow 180ms ease;
@@ -456,7 +797,90 @@ body > * {
   transform: translate(-50%, -50%);
 }
 
-.connection-card.expanded .thread-line {
+.connection-card.fresh .lane-client {
+  animation: connection-endpoint-in 360ms var(--connection-ease) 80ms both;
+}
+
+.connection-card.fresh .thread-state {
+  animation: connection-state-in 280ms var(--connection-ease) 360ms both;
+}
+
+.connection-card.fresh .thread-line::before {
+  animation: connection-line-in 720ms var(--connection-ease) 120ms both;
+}
+
+.connection-card.fresh .thread-line i {
+  animation: connection-packet-in 260ms var(--connection-ease) 460ms both;
+}
+
+.connection-card.fresh .thread-line::after {
+  animation: connection-arrow-in 220ms var(--connection-ease) 660ms both;
+}
+
+.connection-card.fresh .lane-server,
+.connection-card.fresh .connection-chevron {
+  animation: connection-endpoint-in 260ms var(--connection-ease) 620ms both;
+}
+
+@keyframes connection-line-in {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes connection-endpoint-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes connection-state-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes connection-packet-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes connection-arrow-in {
+  from {
+    opacity: 0;
+    transform: translate(-6px, -50%) rotate(45deg) scale(0.7);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-50%) rotate(45deg) scale(1);
+  }
+}
+
+.connection-card.expanded .thread-line::before {
   background: var(--accent);
   box-shadow: 0 0 9px rgba(168, 121, 255, 0.32);
 }
@@ -508,6 +932,17 @@ body > * {
 .connection-details-inner {
   min-height: 0;
   overflow: hidden;
+}
+
+.connection-card.perspective-shift .reference-card {
+  animation: perspective-in 400ms var(--expand-ease);
+}
+
+@keyframes perspective-in {
+  from {
+    opacity: 0.38;
+    transform: translateY(4px);
+  }
 }
 
 .reference-scroller {
@@ -583,6 +1018,31 @@ body > * {
   font-weight: 500;
 }
 
+.reference-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.space-marker {
+  flex: none;
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--rc) 34%, var(--line));
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--rc) 80%, var(--muted));
+  background: color-mix(in srgb, var(--rc) 7%, transparent);
+  font-family: var(--mono);
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .reference-card h2 {
   margin: 0 0 7px;
   font-family: var(--serif);
@@ -647,8 +1107,15 @@ body > * {
   color: var(--c-port);
 }
 
-.endpoint-node.destination {
+.endpoint-node.local {
   border-color: color-mix(in srgb, var(--c-port) 42%, var(--line));
+  background:
+    linear-gradient(120deg, rgba(220, 162, 79, 0.06), transparent 72%),
+    var(--bg-2);
+}
+
+.endpoint-node.peer {
+  opacity: 0.74;
 }
 
 .endpoint-arrow {
@@ -698,6 +1165,12 @@ body > * {
 
 .tuple-field.protocol {
   grid-column: 1 / -1;
+}
+
+.tuple-field.local {
+  background:
+    linear-gradient(120deg, rgba(99, 197, 140, 0.055), transparent 76%),
+    var(--bg-2);
 }
 
 .tuple-field.port strong {
@@ -823,6 +1296,68 @@ body > * {
   backdrop-filter: blur(12px);
 }
 
+.new-connection-notice {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  max-width: calc(100vw - 32px);
+  padding: 7px 11px 7px 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, var(--line));
+  border-radius: 999px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow:
+    0 10px 28px -18px #000,
+    0 0 0 1px rgba(168, 121, 255, 0.08);
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transform: translateX(-50%);
+  backdrop-filter: blur(12px);
+  animation: notice-in 360ms var(--expand-ease);
+}
+
+.new-connection-notice:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
+}
+
+.new-connection-notice-arrow {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  animation: notice-arrow 2.2s var(--expand-ease) infinite;
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 7px);
+  }
+}
+
+@keyframes notice-arrow {
+  0%,
+  55%,
+  100% {
+    opacity: 0.72;
+    transform: translateY(0);
+  }
+
+  72% {
+    opacity: 1;
+    transform: translateY(3px);
+  }
+}
+
 #controls {
   display: flex;
   align-items: center;
@@ -931,17 +1466,18 @@ body > * {
     font-size: 13px;
   }
 
-  .server-summary {
-    min-width: 300px;
-    padding: 11px 14px;
+  .perspective-options button {
+    min-width: 118px;
+    padding-block: 8px;
+    font-size: 12px;
   }
 
-  .server-summary-copy strong {
-    font-size: 13px;
+  .topology-node strong {
+    font-size: 11.5px;
   }
 
-  .server-summary-copy > span {
-    font-size: 9px;
+  .topology-node small {
+    font-size: 8.5px;
   }
 
   .connection-summary {
@@ -1025,9 +1561,63 @@ body > * {
     gap: 11px;
   }
 
-  .server-summary {
+  .perspective-control {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
     width: 100%;
+  }
+
+  .perspective-options {
+    flex: 1;
+    max-width: 270px;
+  }
+
+  .perspective-options button {
     min-width: 0;
+    flex: 1;
+    padding-inline: 7px;
+    font-size: 10.5px;
+  }
+
+  .topology {
+    height: 250px;
+  }
+
+  button.topology-node,
+  .topology-cluster,
+  .topology-empty-client {
+    width: 30%;
+  }
+
+  .topology-server {
+    width: 30%;
+  }
+
+  .topology-node {
+    min-height: 49px;
+    gap: 2px;
+    padding: 7px;
+  }
+
+  .topology-node > span {
+    font-size: 6px;
+  }
+
+  .topology-node strong {
+    font-size: 8px;
+  }
+
+  .topology-node small {
+    font-size: 6.5px;
+  }
+
+  .topology-node.inspected > span::after {
+    display: none;
+  }
+
+  .topology-kicker {
+    font-size: 6.5px;
   }
 
   .connection-summary {
@@ -1086,7 +1676,9 @@ body > * {
   *::before,
   *::after {
     scroll-behavior: auto !important;
+    animation-delay: 0ms !important;
     animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
   }
 
