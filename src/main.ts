@@ -34,7 +34,6 @@ interface AppState {
   selected: string | null;
   expanded: string | null;
   perspective: Perspective;
-  serverFdNext: number;
   serverInodeNext: number;
   clientInodeNext: number;
   clientPidNext: number;
@@ -102,7 +101,6 @@ const state: AppState = {
   selected: "c0",
   expanded: null,
   perspective: "server",
-  serverFdNext: 7,
   serverInodeNext: 12349,
   clientInodeNext: 88424,
   clientPidNext: 2713,
@@ -177,7 +175,6 @@ function reset(): void {
   state.selected = "c0";
   state.expanded = null;
   state.perspective = "server";
-  state.serverFdNext = 7;
   state.serverInodeNext = 12349;
   state.clientInodeNext = 88424;
   state.clientPidNext = 2713;
@@ -201,6 +198,20 @@ function nextClientIp(): string {
   return `203.0.113.${randomInteger(20, 250)}`;
 }
 
+function lowestAvailableServerFd(): number {
+  const occupied = new Set(
+    state.connections.map((connection) => connection.server.fd),
+  );
+
+  // fd 3 is nginx's listening socket, so accepted connections start at fd 4.
+  let candidate = 4;
+  while (occupied.has(candidate)) {
+    candidate += 1;
+  }
+
+  return candidate;
+}
+
 function acceptConnection(): Connection {
   const nextId = connectionId++;
   const connection: Connection = {
@@ -216,7 +227,7 @@ function acceptConnection(): Connection {
     server: {
       process: "nginx",
       pid: NGINX_PID,
-      fd: state.serverFdNext++,
+      fd: lowestAvailableServerFd(),
       inode: state.serverInodeNext++,
     },
     state: "ESTAB",
