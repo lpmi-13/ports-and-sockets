@@ -221,7 +221,7 @@ function acceptConnection(): Connection {
     client: {
       process: "client-app",
       pid: state.clientPidNext++,
-      fd: 7 + (nextId % 3),
+      fd: randomInteger(5, 9),
       inode: state.clientInodeNext++,
     },
     server: {
